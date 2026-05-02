@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useParams, useSearch, useLocation } from "wouter";
+import { useEffect, useState, useRef } from "react";
+import { useParams, useSearch, useLocation, Link } from "wouter";
 import { useGetReport } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +76,11 @@ export default function ReportPage() {
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
+  // Scammer phone auto-flag: lookup each agentPhone in duplicate listings
+  type ScammerMatch = { phone: string; reportCount: number | null; isConfirmed: boolean | null; notes: string | null };
+  const [scammerMatches, setScammerMatches] = useState<ScammerMatch[]>([]);
+  const scammerCheckedRef = useRef(false);
+
   const { data, isLoading, isError, refetch } = useGetReport(reportId, {
     query: {
       refetchInterval: (query) => {
@@ -122,6 +127,34 @@ export default function ReportPage() {
 
     doConfirm();
   }, [paymentStatus, confirmed, confirming, reportId, data, refetch]);
+
+  // Run scammer lookup once after report completes
+  useEffect(() => {
+    if (scammerCheckedRef.current) return;
+    const reportStatus = (data as { status?: string } | undefined)?.status;
+    if (reportStatus !== "complete") return;
+    const dups = (data as { duplicateListings?: Array<{ agentPhone?: string }> })?.duplicateListings ?? [];
+    const phones = [...new Set(dups.map((d) => d.agentPhone).filter(Boolean) as string[])];
+    if (phones.length === 0) return;
+    scammerCheckedRef.current = true;
+
+    Promise.all(
+      phones.map(async (phone) => {
+        try {
+          const r = await fetch(`${API_BASE}/scammer-registry/lookup?phone=${encodeURIComponent(phone)}`);
+          if (!r.ok) return null;
+          const j = await r.json() as { isRegistered: boolean; reportCount: number | null; isConfirmed: boolean | null; notes: string | null };
+          if (j.isRegistered) return { phone, reportCount: j.reportCount, isConfirmed: j.isConfirmed, notes: j.notes };
+          return null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((results) => {
+      const hits = results.filter(Boolean) as ScammerMatch[];
+      if (hits.length > 0) setScammerMatches(hits);
+    });
+  }, [data]);
 
   if (isNaN(reportId)) {
     return (
@@ -266,6 +299,38 @@ export default function ReportPage() {
             </Button>
           </div>
         </div>
+
+        {/* Scammer phone warning */}
+        {scammerMatches.length > 0 && (
+          <Card className="border-red-300 bg-red-50">
+            <CardContent className="pt-5 pb-5 flex items-start gap-3">
+              <AlertTriangle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-bold text-red-800 text-base">
+                  ⚠ Scammer phone number detected in this listing
+                </p>
+                {scammerMatches.map((m) => (
+                  <div key={m.phone} className="mt-2">
+                    <p className="text-sm font-semibold text-red-700">{m.phone}</p>
+                    <p className="text-sm text-red-700">
+                      Linked to {m.reportCount ?? "multiple"} fraud report{(m.reportCount ?? 2) !== 1 ? "s" : ""} in our registry.
+                      {m.isConfirmed ? " Confirmed scammer." : ""}
+                      {m.notes ? ` Note: ${m.notes}` : ""}
+                    </p>
+                  </div>
+                ))}
+                <div className="flex gap-3 mt-3 flex-wrap">
+                  <Link href="/scammer">
+                    <Button size="sm" variant="destructive" className="gap-1.5 h-8">
+                      View in Scammer Registry
+                    </Button>
+                  </Link>
+                  <p className="text-xs text-red-600 self-center">Do not pay any deposit to this agent.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Payment cancelled */}
         {paymentStatus === "cancelled" && reportData.status === "awaiting_payment" && (
