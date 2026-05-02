@@ -13,6 +13,9 @@ import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -243,6 +246,73 @@ function PriceAlertSection({
   );
 }
 
+type CompareRow = { slug: string; name: string; medianPriceKsh: number | null; activeListings: number; avgFraudScore: number | null };
+
+function NeighbourhoodCompareChart({
+  listingType,
+  activeSlug,
+  onSelect,
+}: {
+  listingType: "rent" | "sale";
+  activeSlug: string;
+  onSelect: (slug: string) => void;
+}) {
+  const { data, isLoading } = useQuery<{ neighbourhoods: CompareRow[] }>({
+    queryKey: ["market-compare", listingType],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/market/compare?listingType=${listingType}`);
+      return r.json() as Promise<{ neighbourhoods: CompareRow[] }>;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const rows = (data?.neighbourhoods ?? []).filter((r) => r.medianPriceKsh != null);
+
+  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (rows.length === 0) return (
+    <div className="h-64 flex items-center justify-center text-slate-400">No comparison data yet.</div>
+  );
+
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <BarChart data={rows} margin={{ top: 5, right: 10, bottom: 40, left: 10 }}
+        onClick={(d) => { if (d?.activePayload?.[0]) onSelect((d.activePayload[0].payload as CompareRow).slug); }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+        <XAxis
+          dataKey="name"
+          tick={{ fontSize: 10, fill: "#94a3b8" }}
+          tickLine={false}
+          angle={-35}
+          textAnchor="end"
+          interval={0}
+          height={55}
+        />
+        <YAxis
+          tick={{ fontSize: 11, fill: "#94a3b8" }}
+          tickLine={false}
+          tickFormatter={(v) => formatKsh(v)}
+          width={75}
+        />
+        <Tooltip
+          formatter={(value) => [formatKsh(Number(value)), "Median Price"]}
+          contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+          cursor={{ fill: "rgba(26,58,42,0.06)" }}
+        />
+        <Bar dataKey="medianPriceKsh" radius={[4, 4, 0, 0]} maxBarSize={40}>
+          {rows.map((row) => (
+            <Cell
+              key={row.slug}
+              fill={row.slug === activeSlug ? "#1a3a2a" : "#86efac"}
+              cursor="pointer"
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export default function MarketPage() {
   const [neighbourhood, setNeighbourhood] = useState<string>("");
   const [listingType, setListingType] = useState<"rent" | "sale">("rent");
@@ -325,10 +395,31 @@ export default function MarketPage() {
           </Select>
         </div>
 
+        {/* Neighbourhood comparison — always visible */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart2 className="h-5 w-5 text-primary" />
+              Neighbourhood Price Comparison
+            </CardTitle>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Median {listingType === "rent" ? "rental" : "sale"} price across all tracked Nairobi neighbourhoods.
+              Click a bar to drill into that neighbourhood.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <NeighbourhoodCompareChart
+              listingType={listingType}
+              activeSlug={neighbourhood}
+              onSelect={setNeighbourhood}
+            />
+          </CardContent>
+        </Card>
+
         {!neighbourhood && (
-          <div className="text-center py-24 text-slate-400">
-            <BarChart2 className="h-16 w-16 mx-auto mb-4 opacity-30" />
-            <p className="text-lg">Select a neighbourhood to view market data</p>
+          <div className="text-center py-12 text-slate-400">
+            <BarChart2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p className="text-base">Select a neighbourhood above — or click a bar in the chart — to see detailed stats.</p>
           </div>
         )}
 

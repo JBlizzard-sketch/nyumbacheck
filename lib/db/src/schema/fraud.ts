@@ -50,6 +50,8 @@ export const reportRequestsTable = pgTable("report_requests", {
   paymentRef: text("payment_ref"),
   pricePaid: real("price_paid"),
   stripeSessionId: text("stripe_session_id"),
+  mpesaCheckoutRequestId: text("mpesa_checkout_request_id"),
+  paymentMethod: text("payment_method").$type<"stripe" | "mpesa" | "free">().default("free"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({

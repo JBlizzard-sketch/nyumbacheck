@@ -170,4 +170,60 @@ router.get("/market/trends", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET /market/compare ───────────────────────────────────────────────────────
+// Returns median price for every tracked neighbourhood — used for bar chart
+
+router.get("/market/compare", async (req: Request, res: Response) => {
+  const listingType = (req.query.listingType as string) === "sale" ? "sale" : "rent";
+
+  try {
+    const neighbourhoods = await db
+      .select()
+      .from(neighbourhoodsTable)
+      .where(eq(neighbourhoodsTable.isTracked, 1))
+      .orderBy(neighbourhoodsTable.name);
+
+    // Latest snapshot per neighbourhood
+    const results = await Promise.all(
+      neighbourhoods.map(async (nbhd) => {
+        const [snap] = await db
+          .select({
+            medianPriceKsh: marketSnapshotsTable.medianPriceKsh,
+            activeListings: marketSnapshotsTable.activeListings,
+            avgFraudScore: marketSnapshotsTable.avgFraudScore,
+          })
+          .from(marketSnapshotsTable)
+          .where(
+            and(
+              eq(marketSnapshotsTable.neighbourhoodId, nbhd.id),
+              eq(marketSnapshotsTable.listingType, listingType)
+            )
+          )
+          .orderBy(sql`${marketSnapshotsTable.snapshotDate} DESC`)
+          .limit(1);
+
+        return {
+          slug: nbhd.slug,
+          name: nbhd.name,
+          medianPriceKsh: snap?.medianPriceKsh ?? null,
+          activeListings: snap?.activeListings ?? 0,
+          avgFraudScore: snap?.avgFraudScore ?? null,
+        };
+      })
+    );
+
+    // Sort by median price descending (nulls last)
+    results.sort((a, b) => {
+      if (a.medianPriceKsh == null) return 1;
+      if (b.medianPriceKsh == null) return -1;
+      return b.medianPriceKsh - a.medianPriceKsh;
+    });
+
+    res.json({ listingType, neighbourhoods: results });
+  } catch (err) {
+    logger.error({ err }, "market.compare_error");
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
 export default router;
