@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useRef, useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -54,11 +55,80 @@ function useNeighbourhoodRisk() {
   });
 }
 
-function StatBadge({ value, label }: { value: string; label: string }) {
+// ── Count-up animation hook ───────────────────────────────────────────────────
+function useCountUp(target: number, duration = 1800): number {
+  const [count, setCount] = useState(0);
+  const rafRef = useRef<number | null>(null);
+  const startRef = useRef<number | null>(null);
+  const prevTarget = useRef(0);
+
+  useEffect(() => {
+    if (target === 0 || target === prevTarget.current) return;
+    prevTarget.current = target;
+    startRef.current = null;
+
+    const animate = (ts: number) => {
+      if (!startRef.current) startRef.current = ts;
+      const elapsed = ts - startRef.current;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(eased * target));
+      if (progress < 1) rafRef.current = requestAnimationFrame(animate);
+    };
+
+    rafRef.current = requestAnimationFrame(animate);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target, duration]);
+
+  return count;
+}
+
+function StatBadge({ target, label, prefix = "", suffix = "" }: { target: number; label: string; prefix?: string; suffix?: string }) {
+  const count = useCountUp(target);
+  const display = count === 0 && target === 0 ? "0" : count.toLocaleString();
   return (
-    <div className="text-center px-6 py-4">
-      <p className="text-3xl font-bold text-white">{value}</p>
+    <div className="text-center px-6 py-4 group">
+      <p className="text-3xl font-bold text-white tabular-nums">
+        {prefix}{display}{suffix}
+      </p>
       <p className="text-sm text-primary-foreground/70 mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+// ── Platform sources strip ────────────────────────────────────────────────────
+const PLATFORMS = [
+  { name: "BuyRentKenya", color: "#E87722" },
+  { name: "Jiji.co.ke",   color: "#F7A800" },
+  { name: "Jumia House",  color: "#F54749" },
+  { name: "HassConsult",  color: "#003087" },
+  { name: "PropertySearch", color: "#2563EB" },
+];
+
+function PlatformSourcesStrip() {
+  return (
+    <div className="mt-10 flex flex-col items-center gap-3">
+      <p className="text-xs text-primary-foreground/50 uppercase tracking-widest font-semibold">
+        Analyses listings from
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {PLATFORMS.map((p) => (
+          <span
+            key={p.name}
+            className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 transition-colors border border-white/20 rounded-full px-3 py-1 text-xs font-semibold text-white/90"
+          >
+            <span
+              className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: p.color }}
+            />
+            {p.name}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-full px-3 py-1 text-xs font-semibold text-white/60">
+          + more
+        </span>
+      </div>
     </div>
   );
 }
@@ -495,16 +565,17 @@ export default function HomePage() {
               </Button>
             </Link>
           </div>
+          <PlatformSourcesStrip />
         </div>
       </section>
 
       {/* Live stats bar */}
       <section className="bg-primary/90 border-t border-white/10 px-4">
         <div className="container mx-auto max-w-5xl flex flex-wrap justify-center divide-x divide-white/20">
-          <StatBadge value={reportsAnalyzed.toLocaleString()} label="Reports analyzed" />
-          <StatBadge value={scammersTracked.toLocaleString()} label="Scammers tracked" />
-          <StatBadge value={listingsIndexed.toLocaleString()} label="Listings indexed" />
-          <StatBadge value={criticalCases.toLocaleString()} label="Critical fraud cases" />
+          <StatBadge target={reportsAnalyzed} label="Reports analyzed" />
+          <StatBadge target={scammersTracked} label="Scammers tracked" />
+          <StatBadge target={listingsIndexed} label="Listings indexed" />
+          <StatBadge target={criticalCases} label="Critical fraud cases" />
         </div>
       </section>
 
