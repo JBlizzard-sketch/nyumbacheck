@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff, Scale, AlertTriangle, ShieldAlert, ArrowRight } from "lucide-react";
+import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff, Scale, AlertTriangle, ShieldAlert, ArrowRight, ShieldCheck, Shield } from "lucide-react";
+import { Link } from "wouter";
 import {
   LineChart,
   Line,
@@ -310,6 +311,136 @@ function NeighbourhoodCompareChart({
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  );
+}
+
+// ── Neighbourhood Safety Rankings ─────────────────────────────────────────────
+function safetyGrade(score: number | null): { grade: string; color: string; bg: string; bar: string } {
+  if (score == null) return { grade: "?", color: "text-slate-400", bg: "bg-slate-100", bar: "#94a3b8" };
+  if (score < 20) return { grade: "A", color: "text-green-700", bg: "bg-green-100", bar: "#22c55e" };
+  if (score < 35) return { grade: "B", color: "text-lime-700", bg: "bg-lime-100", bar: "#84cc16" };
+  if (score < 50) return { grade: "C", color: "text-amber-700", bg: "bg-amber-100", bar: "#f59e0b" };
+  if (score < 65) return { grade: "D", color: "text-orange-700", bg: "bg-orange-100", bar: "#f97316" };
+  return { grade: "F", color: "text-red-700", bg: "bg-red-100", bar: "#ef4444" };
+}
+
+function NeighbourhoodSafetyRankings({ listingType }: { listingType: "rent" | "sale" }) {
+  const { data, isLoading } = useQuery<{ neighbourhoods: CompareRow[] }>({
+    queryKey: ["market-compare", listingType],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/market/compare?listingType=${listingType}`);
+      return r.json() as Promise<{ neighbourhoods: CompareRow[] }>;
+    },
+  });
+
+  const rows = [...(data?.neighbourhoods ?? [])]
+    .filter((r) => r.avgFraudScore != null)
+    .sort((a, b) => (a.avgFraudScore ?? 100) - (b.avgFraudScore ?? 100));
+
+  if (!isLoading && rows.length === 0) return null;
+
+  const safest = rows[0];
+  const riskiest = rows[rows.length - 1];
+
+  return (
+    <Card className="mb-8">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Shield className="h-5 w-5 text-primary" />
+          Fraud Safety Rankings
+        </CardTitle>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Nairobi neighbourhoods ranked safest → riskiest based on fraud scores across all analysed listings.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Summary pills */}
+            {safest && riskiest && (
+              <div className="flex flex-wrap gap-3 mb-4">
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5 text-xs">
+                  <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
+                  <span className="text-green-800 font-medium">Safest: {safest.name}</span>
+                  <span className="text-green-600">{Math.round(safest.avgFraudScore ?? 0)}/100</span>
+                </div>
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 text-xs">
+                  <ShieldAlert className="h-3.5 w-3.5 text-red-500" />
+                  <span className="text-red-800 font-medium">Highest risk: {riskiest.name}</span>
+                  <span className="text-red-600">{Math.round(riskiest.avgFraudScore ?? 0)}/100</span>
+                </div>
+              </div>
+            )}
+
+            {/* Rankings table */}
+            <div className="rounded-xl border border-slate-100 overflow-hidden">
+              {rows.map((row, idx) => {
+                const g = safetyGrade(row.avgFraudScore);
+                const pct = Math.round(row.avgFraudScore ?? 0);
+                return (
+                  <Link key={row.slug} href={`/neighbourhood/${row.slug}`}>
+                    <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-50 last:border-0 group">
+                      {/* Rank */}
+                      <span className="flex-shrink-0 w-5 text-xs text-slate-400 font-medium text-right">
+                        {idx + 1}
+                      </span>
+
+                      {/* Grade badge */}
+                      <span
+                        className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${g.color} ${g.bg}`}
+                      >
+                        {g.grade}
+                      </span>
+
+                      {/* Name */}
+                      <span className="flex-1 text-sm font-medium text-slate-800 group-hover:text-primary transition-colors">
+                        {row.name}
+                      </span>
+
+                      {/* Score bar */}
+                      <div className="flex-shrink-0 w-28 hidden sm:flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-1.5 rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%`, backgroundColor: g.bar }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-500 w-10 text-right flex-shrink-0">
+                          {pct}/100
+                        </span>
+                      </div>
+
+                      {/* Median price */}
+                      <span className="flex-shrink-0 text-xs text-slate-500 hidden md:block w-20 text-right">
+                        {formatKsh(row.medianPriceKsh)}
+                      </span>
+
+                      {/* Listings */}
+                      <span className="flex-shrink-0 text-xs text-slate-400 w-14 text-right">
+                        {row.activeListings.toLocaleString()} listings
+                      </span>
+
+                      <ArrowRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-primary flex-shrink-0 transition-colors" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-slate-400 mt-3 text-center">
+              Click any row to view detailed market data for that neighbourhood
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -647,6 +778,9 @@ export default function MarketPage() {
             />
           </CardContent>
         </Card>
+
+        {/* Fraud Safety Rankings */}
+        <NeighbourhoodSafetyRankings listingType={listingType} />
 
         {/* Head-to-head comparison panel */}
         <ComparePanel

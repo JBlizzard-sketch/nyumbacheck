@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useUser } from "@clerk/react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { usePageMeta } from "@/lib/use-page-meta";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 import {
   TrendingUp, MapPin, Home, Building2, AlertTriangle, Clock,
-  ArrowLeft, Loader2, BarChart3, Copy, MessageCircle
+  ArrowLeft, Loader2, BarChart3, Copy, MessageCircle,
+  Bell, BellRing, X, CheckCircle, ShieldCheck
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -59,6 +62,240 @@ const LABEL: Record<string, string> = {
   muthaiga: "Muthaiga", lavington: "Lavington", kasarani: "Kasarani",
   ruaka: "Ruaka", gigiri: "Gigiri",
 };
+
+// ── Price Alert Card ──────────────────────────────────────────────────────────
+type AlertRow = {
+  id: number;
+  neighbourhood: string;
+  listingType: string;
+  maxPriceKsh: number | null;
+  minBedrooms: number | null;
+  createdAt: string;
+};
+
+function NeighbourhoodAlertCard({
+  neighbourhood,
+  listingType,
+  displayName,
+}: {
+  neighbourhood: string;
+  listingType: "rent" | "sale";
+  displayName: string;
+}) {
+  const { user } = useUser();
+  const qc = useQueryClient();
+  const userId = user?.id ?? "";
+  const email = user?.primaryEmailAddress?.emailAddress ?? "";
+
+  const [showForm, setShowForm] = useState(false);
+  const [maxPrice, setMaxPrice] = useState("");
+  const [bedrooms, setBedrooms] = useState("");
+
+  const { data, isLoading } = useQuery<{ alerts: AlertRow[] }>({
+    queryKey: ["nbhd-alerts", userId, neighbourhood, listingType],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/alerts?userId=${encodeURIComponent(userId)}`);
+      if (!r.ok) throw new Error("fetch failed");
+      return r.json() as Promise<{ alerts: AlertRow[] }>;
+    },
+    enabled: !!userId,
+    staleTime: 30_000,
+  });
+
+  const existing = (data?.alerts ?? []).filter(
+    (a) => a.neighbourhood === neighbourhood && a.listingType === listingType,
+  );
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${BASE}/api/alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          email,
+          neighbourhood,
+          listingType,
+          ...(maxPrice ? { maxPriceKsh: parseInt(maxPrice.replace(/,/g, ""), 10) } : {}),
+          ...(bedrooms ? { minBedrooms: parseInt(bedrooms, 10) } : {}),
+        }),
+      });
+      if (!r.ok) throw new Error("Failed to create alert");
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Price alert set! We'll email you when matching listings appear.");
+      qc.invalidateQueries({ queryKey: ["nbhd-alerts"] });
+      setShowForm(false);
+      setMaxPrice("");
+      setBedrooms("");
+    },
+    onError: () => toast.error("Failed to set alert — please try again."),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`${BASE}/api/alerts/${id}?userId=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+      });
+      if (!r.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      toast.success("Alert removed.");
+      qc.invalidateQueries({ queryKey: ["nbhd-alerts"] });
+    },
+  });
+
+  // Not signed in
+  if (!userId) {
+    return (
+      <div className="mt-6 flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500">
+        <Bell className="h-5 w-5 flex-shrink-0 text-slate-400" />
+        <span>
+          <Link href="/sign-in" className="text-primary font-medium hover:underline">Sign in</Link>
+          {" "}to set price alerts for {displayName} — we'll email you when new listings match your criteria.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 p-5 border border-primary/20 bg-primary/5 rounded-2xl">
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <div className="flex items-center gap-2">
+          <BellRing className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-slate-800">
+            Price Alerts — {displayName}
+          </span>
+          {existing.length > 0 && (
+            <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">
+              {existing.length} active
+            </Badge>
+          )}
+        </div>
+        {!showForm && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs h-8 border-primary/30 hover:bg-primary/5 text-primary"
+            onClick={() => setShowForm(true)}
+          >
+            <Bell className="h-3.5 w-3.5" /> Set Alert
+          </Button>
+        )}
+      </div>
+
+      {/* Loading */}
+      {isLoading && (
+        <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading alerts…
+        </div>
+      )}
+
+      {/* Existing alerts for this neighbourhood + type */}
+      {existing.map((a) => (
+        <div
+          key={a.id}
+          className="flex items-center gap-3 p-3 bg-white border border-primary/15 rounded-lg mb-2 text-sm"
+        >
+          <CheckCircle className="h-4 w-4 text-primary flex-shrink-0" />
+          <div className="flex-1 text-slate-700 text-xs">
+            <span className="font-medium capitalize">{a.neighbourhood}</span>
+            {" · "}
+            <span className="capitalize">{a.listingType}</span>
+            {a.maxPriceKsh != null && (
+              <span> · Max KSh {a.maxPriceKsh.toLocaleString()}</span>
+            )}
+            {a.minBedrooms != null && <span> · {a.minBedrooms}+ bed</span>}
+          </div>
+          <button
+            onClick={() => remove.mutate(a.id)}
+            disabled={remove.isPending}
+            className="text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
+            title="Remove alert"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+
+      {/* Empty state */}
+      {!isLoading && existing.length === 0 && !showForm && (
+        <p className="text-xs text-slate-400 mb-1">
+          No active alerts for {displayName} {listingType} listings.
+          We'll email you when new listings match your criteria.
+        </p>
+      )}
+
+      {/* Create form */}
+      {showForm && (
+        <div className="pt-3 border-t border-primary/10 space-y-3">
+          <p className="text-xs text-slate-600 font-medium">
+            Alert criteria — <span className="capitalize text-primary">{displayName}</span>{" "}
+            {listingType === "rent" ? "rentals" : "for sale"}
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">
+                Max price (KSh) <span className="text-slate-400 font-normal">optional</span>
+              </label>
+              <Input
+                placeholder={listingType === "rent" ? "e.g. 80000" : "e.g. 8000000"}
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                className="h-9 text-sm"
+                type="number"
+                min={0}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">
+                Min bedrooms <span className="text-slate-400 font-normal">optional</span>
+              </label>
+              <Input
+                placeholder="e.g. 2"
+                value={bedrooms}
+                onChange={(e) => setBedrooms(e.target.value)}
+                className="h-9 text-sm"
+                type="number"
+                min={0}
+                max={10}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 gap-1.5"
+              disabled={create.isPending}
+              onClick={() => create.mutate()}
+            >
+              {create.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Bell className="h-3.5 w-3.5" />
+              )}
+              Create Alert
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-slate-500"
+              onClick={() => { setShowForm(false); setMaxPrice(""); setBedrooms(""); }}
+            >
+              Cancel
+            </Button>
+          </div>
+          <p className="text-xs text-slate-400 flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" />
+            Alerts are sent to {email} · Max one email per 24 hours
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function NeighbourhoodPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -375,8 +612,15 @@ export default function NeighbourhoodPage() {
           </>
         )}
 
+        {/* Price Alert Card */}
+        <NeighbourhoodAlertCard
+          neighbourhood={slug ?? ""}
+          listingType={listingType}
+          displayName={displayName}
+        />
+
         {/* CTA */}
-        <div className="mt-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <p className="font-semibold text-slate-900 text-sm">Checking a listing in {displayName}?</p>
             <p className="text-xs text-slate-500 mt-0.5">Run a full fraud analysis on any property URL or address for KSh 500.</p>

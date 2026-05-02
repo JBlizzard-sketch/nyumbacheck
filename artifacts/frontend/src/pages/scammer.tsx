@@ -3,15 +3,142 @@ import { useLookupScammer } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, CheckCircle, Phone, Loader2, ShieldAlert, Flag, User, ArrowRight, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle, Phone, Loader2, ShieldAlert, Flag, User, ArrowRight, Users, TrendingUp, Copy } from "lucide-react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type ReportState = "idle" | "submitting" | "success" | "error";
+
+// ── Trending Scammers Leaderboard ─────────────────────────────────────────────
+type TrendingEntry = {
+  id: number;
+  normalisedPhone: string;
+  reportCount: number;
+  linkedListingCount: number | null;
+  isConfirmed: boolean;
+  notes: string | null;
+  updatedAt: string;
+};
+
+function TrendingScammers({ onSearch }: { onSearch: (phone: string) => void }) {
+  const { data, isLoading } = useQuery<{ entries: TrendingEntry[] }>({
+    queryKey: ["scammer-trending"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/scammer-registry/trending`);
+      if (!r.ok) throw new Error("fetch failed");
+      return r.json() as Promise<{ entries: TrendingEntry[] }>;
+    },
+    staleTime: 60_000,
+  });
+
+  const entries = data?.entries ?? [];
+  if (!isLoading && entries.length === 0) return null;
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-red-500" />
+          Most Reported Numbers
+          {!isLoading && entries.length > 0 && (
+            <Badge className="ml-auto bg-red-100 text-red-800 border-red-200 text-xs">
+              {entries.length} entries
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {entries.map((entry, idx) => (
+              <div
+                key={entry.id}
+                className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors group"
+              >
+                {/* Rank */}
+                <span
+                  className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                    idx === 0
+                      ? "bg-red-600 text-white"
+                      : idx === 1
+                      ? "bg-red-400 text-white"
+                      : idx === 2
+                      ? "bg-orange-400 text-white"
+                      : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+
+                {/* Phone + badges */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-sm text-slate-800 font-medium">
+                      {entry.normalisedPhone}
+                    </span>
+                    {entry.isConfirmed && (
+                      <Badge className="text-xs bg-red-100 text-red-800 border-red-200 h-5 px-1.5">
+                        Confirmed
+                      </Badge>
+                    )}
+                    {(entry.linkedListingCount ?? 0) > 0 && (
+                      <Badge variant="outline" className="text-xs h-5 px-1.5 text-slate-500">
+                        {entry.linkedListingCount} listing{(entry.linkedListingCount ?? 0) !== 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                  </div>
+                  {entry.notes && (
+                    <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{entry.notes}</p>
+                  )}
+                </div>
+
+                {/* Report count pill */}
+                <span className="flex-shrink-0 text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
+                  {entry.reportCount}× reported
+                </span>
+
+                {/* Actions */}
+                <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    title="Copy number"
+                    onClick={() => {
+                      navigator.clipboard.writeText(entry.normalisedPhone).then(() =>
+                        toast.success("Number copied"),
+                      );
+                    }}
+                    className="p-1.5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    title="Look up"
+                    onClick={() => onSearch(entry.normalisedPhone)}
+                    className="p-1.5 rounded hover:bg-primary/10 text-slate-400 hover:text-primary transition-colors"
+                  >
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-slate-400 mt-3 text-center">
+          Ordered by number of community reports · Click → to look up
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
 
 function useAgentByPhone(phone: string) {
   return useQuery<{ found: boolean; agentId: number | null }>({
@@ -29,6 +156,12 @@ function useAgentByPhone(phone: string) {
 export default function ScammerPage() {
   const [phone, setPhone] = useState("");
   const [submitted, setSubmitted] = useState("");
+
+  const handleSearchFromLeaderboard = (normalisedPhone: string) => {
+    setPhone(normalisedPhone);
+    setSubmitted(normalisedPhone);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // report form state
   const [reportPhone, setReportPhone] = useState("");
@@ -190,6 +323,11 @@ export default function ScammerPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Trending leaderboard — hidden while showing a result */}
+        {!submitted && (
+          <TrendingScammers onSearch={handleSearchFromLeaderboard} />
         )}
 
         <div className="mt-8 p-4 bg-slate-100 rounded-xl text-sm text-slate-600">

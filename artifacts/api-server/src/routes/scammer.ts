@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { scammerRegistryTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -119,6 +119,31 @@ router.post("/scammer-registry/report", async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err, normalisedPhone }, "scammer.report_error");
     res.status(500).json({ error: "internal_error", message: "Failed to submit report" });
+  }
+});
+
+// ── GET /scammer-registry/trending ────────────────────────────────────────────
+
+router.get("/scammer-registry/trending", async (_req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: scammerRegistryTable.id,
+        normalisedPhone: scammerRegistryTable.normalisedPhone,
+        reportCount: scammerRegistryTable.reportCount,
+        linkedListingCount: scammerRegistryTable.linkedListingCount,
+        isConfirmed: scammerRegistryTable.isConfirmed,
+        notes: scammerRegistryTable.notes,
+        updatedAt: scammerRegistryTable.updatedAt,
+      })
+      .from(scammerRegistryTable)
+      .orderBy(desc(scammerRegistryTable.reportCount), desc(scammerRegistryTable.updatedAt))
+      .limit(10);
+
+    res.json({ entries: rows, total: rows.length });
+  } catch (err) {
+    logger.error({ err }, "scammer.trending_error");
+    res.status(500).json({ error: "internal_error", message: "Failed to fetch trending" });
   }
 });
 

@@ -126,9 +126,9 @@ export default function AgentPage() {
   return (
     <Layout>
       <div className="container mx-auto px-4 py-10 max-w-4xl">
-        <Link href="/scammer">
+        <Link href="/agents">
           <button className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-primary mb-6 transition-colors">
-            <ArrowLeft className="h-4 w-4" /> Back to Scammer Lookup
+            <ArrowLeft className="h-4 w-4" /> Back to Agent Directory
           </button>
         </Link>
 
