@@ -14,6 +14,7 @@ import {
   rawListingsTable,
   dedupClustersTable,
   neighbourhoodsTable,
+  priceAlertsTable,
 } from "@workspace/db/schema";
 import { sql, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -172,6 +173,49 @@ router.post("/admin/reports/:id/simulate", async (req: Request, res: Response) =
     res.json({ ok: true, status: updated?.status ?? "complete" });
   } catch (err) {
     logger.error({ err, id }, "admin.simulate_report_error");
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// ── GET /admin/alerts ─────────────────────────────────────────────────────────
+
+router.get("/admin/alerts", async (_req: Request, res: Response) => {
+  try {
+    const [alerts, byNeighbourhood, byListingType] = await Promise.all([
+      db
+        .select()
+        .from(priceAlertsTable)
+        .where(eq(priceAlertsTable.isActive, true))
+        .orderBy(desc(priceAlertsTable.createdAt))
+        .limit(200),
+
+      db
+        .select({
+          neighbourhood: priceAlertsTable.neighbourhood,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(priceAlertsTable)
+        .where(eq(priceAlertsTable.isActive, true))
+        .groupBy(priceAlertsTable.neighbourhood)
+        .orderBy(desc(sql`COUNT(*)`)),
+
+      db
+        .select({
+          listingType: priceAlertsTable.listingType,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(priceAlertsTable)
+        .where(eq(priceAlertsTable.isActive, true))
+        .groupBy(priceAlertsTable.listingType),
+    ]);
+
+    res.json({
+      alerts,
+      total: alerts.length,
+      demand: { byNeighbourhood, byListingType },
+    });
+  } catch (err) {
+    logger.error({ err }, "admin.alerts_error");
     res.status(500).json({ error: "internal_error" });
   }
 });

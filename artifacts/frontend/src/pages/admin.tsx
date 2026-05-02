@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  ShieldCheck, FileText, Users, Database, TrendingUp, AlertTriangle,
-  CheckCircle, Clock, XCircle, Loader2, RefreshCw, Play, ExternalLink
+  ShieldCheck, FileText, Database, TrendingUp, AlertTriangle,
+  CheckCircle, Clock, XCircle, Loader2, RefreshCw, Play, ExternalLink,
+  Bell, MapPin, Home, Building2
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -36,6 +37,22 @@ type ScammerRow = {
   notes: string | null; createdAt: string;
 };
 
+type AlertRow = {
+  id: number; userId: string; email: string | null;
+  neighbourhood: string | null; listingType: string | null;
+  maxPriceKsh: number | null; minBedrooms: number | null;
+  maxBedrooms: number | null; isActive: boolean; createdAt: string;
+};
+
+type AlertsData = {
+  alerts: AlertRow[];
+  total: number;
+  demand: {
+    byNeighbourhood: Array<{ neighbourhood: string | null; count: number }>;
+    byListingType: Array<{ listingType: string | null; count: number }>;
+  };
+};
+
 const RISK_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-700 border-red-200",
   high: "bg-orange-100 text-orange-700 border-orange-200",
@@ -60,7 +77,7 @@ async function fetchApi<T>(path: string): Promise<T> {
 export default function AdminPage() {
   const { user, isLoaded } = useUser();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"overview" | "reports" | "scammers">("overview");
+  const [tab, setTab] = useState<"overview" | "reports" | "scammers" | "alerts">("overview");
 
   const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? "";
   const isAdmin = ADMIN_EMAILS.length === 0 || ADMIN_EMAILS.includes(email);
@@ -83,6 +100,13 @@ export default function AdminPage() {
     queryKey: ["admin-scammers"],
     queryFn: () => fetchApi<{ scammers: ScammerRow[] }>("/admin/scammers"),
     enabled: isAdmin && tab === "scammers",
+    refetchInterval: 30_000,
+  });
+
+  const { data: alertsData, isLoading: alertsLoading } = useQuery<AlertsData>({
+    queryKey: ["admin-alerts"],
+    queryFn: () => fetchApi<AlertsData>("/admin/alerts"),
+    enabled: isAdmin && tab === "alerts",
     refetchInterval: 30_000,
   });
 
@@ -194,17 +218,22 @@ export default function AdminPage() {
 
         {/* Tab nav */}
         <div className="flex gap-1 mb-6 border-b border-slate-200">
-          {(["overview", "reports", "scammers"] as const).map((t) => (
+          {([
+            { key: "overview", label: "Overview" },
+            { key: "reports", label: "Reports" },
+            { key: "scammers", label: "Scammers" },
+            { key: "alerts", label: "Price Alerts" },
+          ] as const).map(({ key, label }) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-medium capitalize border-b-2 -mb-px transition-colors ${
-                tab === t
+              key={key}
+              onClick={() => setTab(key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === key
                   ? "border-primary text-primary"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
-              {t}
+              {label}
             </button>
           ))}
         </div>
@@ -338,6 +367,133 @@ export default function AdminPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Price Alerts tab */}
+        {tab === "alerts" && (
+          <div className="space-y-6">
+            {alertsLoading ? (
+              <div className="flex items-center gap-2 p-6 text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading alerts…
+              </div>
+            ) : (
+              <>
+                {/* Summary cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <StatCard
+                    icon={<Bell className="h-5 w-5 text-primary" />}
+                    label="Active Alerts"
+                    value={alertsData?.total ?? 0}
+                    sub="price watchers"
+                  />
+                  <StatCard
+                    icon={<MapPin className="h-5 w-5 text-blue-500" />}
+                    label="Top Area"
+                    value={alertsData?.demand.byNeighbourhood[0]?.neighbourhood ?? "—"}
+                    sub={`${alertsData?.demand.byNeighbourhood[0]?.count ?? 0} alerts`}
+                  />
+                  <StatCard
+                    icon={<Home className="h-5 w-5 text-amber-500" />}
+                    label="Rental Alerts"
+                    value={alertsData?.demand.byListingType.find((t) => t.listingType === "rent")?.count ?? 0}
+                    sub="watching rent listings"
+                  />
+                  <StatCard
+                    icon={<Building2 className="h-5 w-5 text-emerald-500" />}
+                    label="Sale Alerts"
+                    value={alertsData?.demand.byListingType.find((t) => t.listingType === "sale")?.count ?? 0}
+                    sub="watching sale listings"
+                  />
+                </div>
+
+                {/* Demand by neighbourhood */}
+                {(alertsData?.demand.byNeighbourhood.length ?? 0) > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-primary" /> Demand by Neighbourhood
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {alertsData!.demand.byNeighbourhood.slice(0, 10).map(({ neighbourhood, count }) => {
+                        const max = alertsData!.demand.byNeighbourhood[0]?.count ?? 1;
+                        const pct = Math.round((count / max) * 100);
+                        return (
+                          <div key={neighbourhood}>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="font-medium text-slate-700 capitalize">{neighbourhood ?? "Unknown"}</span>
+                              <span className="text-slate-500 text-xs">{count} alert{count !== 1 ? "s" : ""}</span>
+                            </div>
+                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full transition-all"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Alerts table */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Active Price Alerts</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-slate-50">
+                            <th className="text-left px-4 py-3 text-slate-500 font-medium">#</th>
+                            <th className="text-left px-4 py-3 text-slate-500 font-medium">Email</th>
+                            <th className="text-left px-4 py-3 text-slate-500 font-medium">Neighbourhood</th>
+                            <th className="text-left px-4 py-3 text-slate-500 font-medium">Type</th>
+                            <th className="text-left px-4 py-3 text-slate-500 font-medium">Max Price</th>
+                            <th className="text-left px-4 py-3 text-slate-500 font-medium">Min Beds</th>
+                            <th className="text-left px-4 py-3 text-slate-500 font-medium">Created</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(alertsData?.alerts ?? []).map((a) => (
+                            <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 text-slate-400 font-mono text-xs">{a.id}</td>
+                              <td className="px-4 py-3 text-slate-600 text-xs max-w-[160px] truncate">
+                                {a.email ? a.email.replace(/^(.{2})(.*)(@.*)$/, (_, a, b, c) => a + b.replace(/./g, "·") + c) : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-slate-700 capitalize">{a.neighbourhood ?? "—"}</td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${a.listingType === "rent" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {a.listingType ?? "—"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-slate-700 text-xs">
+                                {a.maxPriceKsh != null ? `KSh ${a.maxPriceKsh.toLocaleString()}` : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-slate-500 text-xs">{a.minBedrooms ?? "—"}</td>
+                              <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
+                                {new Date(a.createdAt).toLocaleString("en-KE", { dateStyle: "short", timeStyle: "short" })}
+                              </td>
+                            </tr>
+                          ))}
+                          {(alertsData?.alerts ?? []).length === 0 && (
+                            <tr>
+                              <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                                <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                                No active price alerts yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
         )}
 
         {/* Scammers tab */}

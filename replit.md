@@ -1,5 +1,8 @@
 # NyumbaCheck — Real Estate Fraud Detection Platform
 
+## Phase 37 Complete
+- **Admin "Price Alerts" tab**: 4th tab added to the admin dashboard. Endpoint `GET /api/admin/alerts` returns all active price alerts with demand aggregations (by neighbourhood, by listing type). Frontend tab shows: 4 stat cards (total alerts, top area, rental count, sale count), a "Demand by Neighbourhood" bar chart showing relative watch-pressure per area, and a full sortable alerts table with email (partially anonymised), neighbourhood, listing type, max price, min bedrooms, and created date.
+
 ## Phase 36 Complete
 - **Home hero — "Quick phone check" form**: Compact phone input with "GOT A SUSPICIOUS NUMBER?" label and "Check" button added below the main hero CTAs. On submit, navigates to `/scammer?phone=<number>` so the lookup auto-triggers.
 - **Scammer page — `?phone=` URL param auto-submit**: On mount, reads the `phone` query param via `useSearch` (wouter) and auto-fills + auto-submits the lookup. Deep-linkable from WhatsApp shares, the home quick-check, or any external link.
