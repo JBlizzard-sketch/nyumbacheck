@@ -1,8 +1,81 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { Show, useUser, useClerk } from "@clerk/react";
-import { Shield, Home, TrendingUp, Phone, List, LogOut, ShieldCheck, Users, Menu, X, ChevronRight } from "lucide-react";
+import { Shield, Home, TrendingUp, Phone, List, LogOut, ShieldCheck, Users, Menu, X, ChevronRight, User } from "lucide-react";
 import { Button } from "./ui/button";
+
+function getInitials(user: ReturnType<typeof useUser>["user"]): string {
+  if (!user) return "?";
+  const first = user.firstName?.[0] ?? "";
+  const last = user.lastName?.[0] ?? "";
+  if (first || last) return (first + last).toUpperCase();
+  return (user.primaryEmailAddress?.emailAddress?.[0] ?? "?").toUpperCase();
+}
+
+function UserMenu({
+  user,
+  signOut,
+  location,
+}: {
+  user: ReturnType<typeof useUser>["user"];
+  signOut: () => void;
+  location: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const initials = getInitials(user);
+  const email = user?.primaryEmailAddress?.emailAddress ?? "";
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-9 h-9 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center hover:opacity-90 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label="Account menu"
+      >
+        {initials}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-11 w-52 bg-white border border-slate-100 rounded-xl shadow-xl py-1.5 z-50">
+          <div className="px-4 py-2.5 border-b border-slate-100">
+            <p className="text-xs font-semibold text-slate-800 truncate">{initials}</p>
+            <p className="text-xs text-slate-400 truncate">{email}</p>
+          </div>
+          {[
+            { href: "/account",    label: "My Account",  Icon: User },
+            { href: "/my-reports", label: "My Reports",  Icon: List },
+          ].map(({ href, label, Icon }) => (
+            <Link key={href} href={href} onClick={() => setOpen(false)}>
+              <div className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer transition-colors ${
+                location === href ? "text-primary font-semibold bg-primary/5" : "text-slate-700 hover:bg-slate-50"
+              }`}>
+                <Icon className="h-4 w-4 flex-shrink-0" /> {label}
+              </div>
+            </Link>
+          ))}
+          <div className="border-t border-slate-100 mt-1 pt-1">
+            <button
+              onClick={() => { setOpen(false); signOut(); }}
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="h-4 w-4 flex-shrink-0" /> Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const NAV_LINKS = [
   { href: "/check", label: "Check Property", icon: Home },
@@ -64,12 +137,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {/* Desktop auth */}
           <div className="hidden lg:flex items-center gap-3">
             <Show when="signed-in">
-              <span className="text-sm text-slate-500 max-w-[160px] truncate">
-                {user?.primaryEmailAddress?.emailAddress}
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => signOut()} className="gap-1.5">
-                <LogOut className="h-4 w-4" /> Sign Out
-              </Button>
+              <UserMenu user={user} signOut={signOut} location={location} />
             </Show>
             <Show when="signed-out">
               <Link href="/sign-in" className="text-sm font-medium text-slate-600 hover:text-primary px-3 py-2">
@@ -142,19 +210,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
           <Show when="signed-in">
-            <Link href="/my-reports">
-              <div
-                className={`flex items-center gap-3 px-5 py-3.5 cursor-pointer transition-colors ${
-                  location === "/my-reports"
-                    ? "bg-primary/8 text-primary font-semibold border-r-2 border-primary"
-                    : "text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                <List className="h-4.5 w-4.5 flex-shrink-0" />
-                <span className="text-sm font-medium">My Reports</span>
-                <ChevronRight className="h-4 w-4 ml-auto text-slate-300" />
-              </div>
-            </Link>
+            {[
+              { href: "/account",    label: "My Account", icon: User },
+              { href: "/my-reports", label: "My Reports",  icon: List },
+            ].map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={href}>
+                <div
+                  className={`flex items-center gap-3 px-5 py-3.5 cursor-pointer transition-colors ${
+                    location === href
+                      ? "bg-primary/8 text-primary font-semibold border-r-2 border-primary"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-sm font-medium">{label}</span>
+                  <ChevronRight className="h-4 w-4 ml-auto text-slate-300" />
+                </div>
+              </Link>
+            ))}
           </Show>
         </nav>
 
@@ -218,6 +291,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <p className="font-semibold text-slate-700 mb-3">Account</p>
                 <div className="space-y-2 text-slate-500">
                   <div><Link href="/sign-up" className="hover:text-primary transition-colors">Sign Up</Link></div>
+                  <div><Link href="/account" className="hover:text-primary transition-colors">My Account</Link></div>
                   <div><Link href="/my-reports" className="hover:text-primary transition-colors">My Reports</Link></div>
                 </div>
               </div>
