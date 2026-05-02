@@ -44,6 +44,35 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.egg
+
+# Playwright browsers
+scraper/playwright-browsers/
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+pgdata/
+redisdata/
+
 # Replit
 .cache/
 .local/
