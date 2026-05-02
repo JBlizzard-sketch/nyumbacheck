@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startReportSimulator } from "./lib/report-simulator";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,8 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Start the background report simulation engine
+  // In production this is replaced by the Python Celery pipeline
+  startReportSimulator();
 });

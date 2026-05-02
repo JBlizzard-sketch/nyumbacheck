@@ -153,7 +153,7 @@ async function fetchFraudScoreData(
 }> {
   try {
     const { fraudScoresTable, dedupClustersTable, dedupClusterMembersTable, rawListingsTable, platformsTable } = await import("@workspace/db/schema");
-    const { eq: eqOp } = await import("drizzle-orm");
+    const { eq: eqOp, inArray } = await import("drizzle-orm");
 
     const [score] = await db
       .select()
@@ -214,7 +214,7 @@ async function fetchFraudScoreData(
             })
             .from(rawListingsTable)
             .innerJoin(platformsTable, eqOp(rawListingsTable.platformId, platformsTable.id))
-            .where(eqOp(rawListingsTable.id, listingIds[0])) // simplified for now
+            .where(inArray(rawListingsTable.id, listingIds))
             .limit(20);
 
           duplicateListings = listings.map((l) => ({
