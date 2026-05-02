@@ -9,6 +9,7 @@ import {
   TrendingDown, AlertTriangle, CheckCircle, Loader2, ArrowLeft, ExternalLink, Copy
 } from "lucide-react";
 import { toast } from "sonner";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -86,6 +87,16 @@ export default function AgentPage() {
       .then(data => { setAgent(data); setLoading(false); })
       .catch(code => { setNotFound(code === 404); setLoading(false); });
   }, [agentId]);
+
+  usePageMeta(
+    agent
+      ? {
+          title: agent.name,
+          description: `${agent.name}${agent.company ? ` · ${agent.company}` : ""} — Reputation score: ${Math.round(agent.reputationScore)}/100, ${agent.totalListings} listings, ${Math.round(agent.ghostListingRate * 100)}% ghost rate.${agent.isBlacklisted ? " ⚠ Blacklisted agent." : agent.isVerified ? " ✓ Verified agent." : ""} NyumbaCheck Agent Directory.`,
+          ogType: "article",
+        }
+      : null
+  );
 
   if (loading) {
     return (

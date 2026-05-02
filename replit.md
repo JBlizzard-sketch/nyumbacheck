@@ -1,5 +1,13 @@
 # NyumbaCheck — Real Estate Fraud Detection Platform
 
+## Phase 22 Complete
+- **Mobile hamburger nav** — slide-in drawer from right (lg: breakpoint), active-link highlighting, body scroll lock, auto-closes on route change; all nav links + auth actions inside drawer
+- **Neighbourhood Detail Pages** (`/neighbourhood/:slug`) — shareable URL per neighbourhood; rent/sale toggle; 4-stat summary grid; fraud alert banner; 90-day area price trend chart; 90-day active listings chart; copy link + WhatsApp share; CTA to fraud check
+- **Dynamic OG meta tags** (`src/lib/use-page-meta.ts`) — sets `document.title` + `meta[description]` + OG tags on report, agent, and neighbourhood pages
+- **Market page** — "Full neighbourhood page →" link when a neighbourhood is selected in the bar chart
+- **GitHub push**: rate-limited; code in Replit checkpoint (Phase 22)
+
+
 ## Overview
 
 Nairobi real estate fraud detection and market intelligence platform. Two core products:

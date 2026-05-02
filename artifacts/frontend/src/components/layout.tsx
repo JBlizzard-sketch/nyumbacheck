@@ -1,11 +1,31 @@
-import { Link } from "wouter";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import { Show, useUser, useClerk } from "@clerk/react";
-import { Shield, Home, TrendingUp, Phone, List, LogOut, ShieldCheck, Users } from "lucide-react";
+import { Shield, Home, TrendingUp, Phone, List, LogOut, ShieldCheck, Users, Menu, X, ChevronRight } from "lucide-react";
 import { Button } from "./ui/button";
+
+const NAV_LINKS = [
+  { href: "/check", label: "Check Property", icon: Home },
+  { href: "/market", label: "Market", icon: TrendingUp },
+  { href: "/scammer", label: "Scammer Lookup", icon: Phone },
+  { href: "/agents", label: "Agents", icon: Users },
+  { href: "/verify", label: "Get Verified", icon: ShieldCheck },
+];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [location] = useLocation();
+
+  // Close mobile menu on route change
+  useEffect(() => { setMenuOpen(false); }, [location]);
+
+  // Lock body scroll when menu open
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [menuOpen]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
@@ -15,49 +35,156 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Shield className="h-6 w-6" />
             <span>NyumbaCheck</span>
           </Link>
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="/check" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
-              <Home className="h-4 w-4" /> Check Property
-            </Link>
-            <Link href="/market" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
-              <TrendingUp className="h-4 w-4" /> Market
-            </Link>
-            <Link href="/scammer" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
-              <Phone className="h-4 w-4" /> Scammer Lookup
-            </Link>
-            <Link href="/agents" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
-              <Users className="h-4 w-4" /> Agents
-            </Link>
-            <Link href="/verify" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
-              <ShieldCheck className="h-4 w-4" /> Get Verified
-            </Link>
+
+          {/* Desktop nav */}
+          <nav className="hidden lg:flex items-center gap-6">
+            {NAV_LINKS.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+                  location === href ? "text-primary" : "text-slate-600 hover:text-primary"
+                }`}
+              >
+                <Icon className="h-4 w-4" /> {label}
+              </Link>
+            ))}
             <Show when="signed-in">
-              <Link href="/my-reports" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
+              <Link
+                href="/my-reports"
+                className={`text-sm font-medium transition-colors flex items-center gap-1 ${
+                  location === "/my-reports" ? "text-primary" : "text-slate-600 hover:text-primary"
+                }`}
+              >
                 <List className="h-4 w-4" /> My Reports
               </Link>
             </Show>
           </nav>
-          <div className="flex items-center gap-4">
+
+          {/* Desktop auth */}
+          <div className="hidden lg:flex items-center gap-3">
             <Show when="signed-in">
-              <span className="text-sm text-slate-600 hidden sm:inline-block">{user?.primaryEmailAddress?.emailAddress}</span>
-              <Button variant="ghost" size="sm" onClick={() => signOut()}>
-                <LogOut className="h-4 w-4 mr-2" /> Sign Out
+              <span className="text-sm text-slate-500 max-w-[160px] truncate">
+                {user?.primaryEmailAddress?.emailAddress}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => signOut()} className="gap-1.5">
+                <LogOut className="h-4 w-4" /> Sign Out
               </Button>
             </Show>
             <Show when="signed-out">
-              <Link href="/sign-in" className="text-sm font-medium text-primary hover:text-primary/80 px-4 py-2">
+              <Link href="/sign-in" className="text-sm font-medium text-slate-600 hover:text-primary px-3 py-2">
                 Sign In
               </Link>
               <Link href="/sign-up">
-                <Button>Get Started</Button>
+                <Button size="sm">Get Started</Button>
               </Link>
             </Show>
           </div>
+
+          {/* Mobile: auth shortcut + hamburger */}
+          <div className="flex lg:hidden items-center gap-2">
+            <Show when="signed-out">
+              <Link href="/sign-in" className="text-sm font-medium text-primary px-3 py-1.5 hidden sm:block">
+                Sign In
+              </Link>
+            </Show>
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+              aria-label="Toggle menu"
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* Mobile overlay */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile slide-in drawer */}
+      <div
+        className={`fixed top-0 right-0 z-50 h-full w-72 max-w-[85vw] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out lg:hidden ${
+          menuOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        {/* Drawer header */}
+        <div className="flex items-center justify-between px-5 h-16 border-b flex-shrink-0">
+          <div className="flex items-center gap-2 font-bold text-primary">
+            <Shield className="h-5 w-5" />
+            <span>NyumbaCheck</span>
+          </div>
+          <button onClick={() => setMenuOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Drawer links */}
+        <nav className="flex-1 overflow-y-auto py-3">
+          {NAV_LINKS.map(({ href, label, icon: Icon }) => (
+            <Link key={href} href={href}>
+              <div
+                className={`flex items-center gap-3 px-5 py-3.5 cursor-pointer transition-colors ${
+                  location === href
+                    ? "bg-primary/8 text-primary font-semibold border-r-2 border-primary"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <Icon className="h-4.5 w-4.5 flex-shrink-0" />
+                <span className="text-sm font-medium">{label}</span>
+                <ChevronRight className="h-4 w-4 ml-auto text-slate-300" />
+              </div>
+            </Link>
+          ))}
+          <Show when="signed-in">
+            <Link href="/my-reports">
+              <div
+                className={`flex items-center gap-3 px-5 py-3.5 cursor-pointer transition-colors ${
+                  location === "/my-reports"
+                    ? "bg-primary/8 text-primary font-semibold border-r-2 border-primary"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <List className="h-4.5 w-4.5 flex-shrink-0" />
+                <span className="text-sm font-medium">My Reports</span>
+                <ChevronRight className="h-4 w-4 ml-auto text-slate-300" />
+              </div>
+            </Link>
+          </Show>
+        </nav>
+
+        {/* Drawer footer — auth */}
+        <div className="border-t px-5 py-4 flex-shrink-0">
+          <Show when="signed-in">
+            <p className="text-xs text-slate-400 truncate mb-3">
+              {user?.primaryEmailAddress?.emailAddress}
+            </p>
+            <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => signOut()}>
+              <LogOut className="h-4 w-4" /> Sign Out
+            </Button>
+          </Show>
+          <Show when="signed-out">
+            <div className="flex flex-col gap-2">
+              <Link href="/sign-up">
+                <Button size="sm" className="w-full">Get Started — Free</Button>
+              </Link>
+              <Link href="/sign-in">
+                <Button variant="outline" size="sm" className="w-full">Sign In</Button>
+              </Link>
+            </div>
+          </Show>
+        </div>
+      </div>
+
       <main className="flex-1">
         {children}
       </main>
+
       <footer className="border-t bg-white py-12 mt-auto">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-start justify-between gap-8 mb-8">
@@ -66,7 +193,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Shield className="h-5 w-5 text-primary" />
                 <span className="font-bold text-slate-900 text-lg">NyumbaCheck</span>
               </div>
-              <p className="text-sm text-slate-500 max-w-xs">Protecting Nairobi real estate from fraud. The only AI-powered property checker built for Kenya.</p>
+              <p className="text-sm text-slate-500 max-w-xs">
+                Protecting Nairobi real estate from fraud. The only AI-powered property checker built for Kenya.
+              </p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-8 text-sm">
               <div>

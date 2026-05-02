@@ -425,6 +425,16 @@ export default function MarketPage() {
 
         {neighbourhood && (
           <>
+            {/* Neighbourhood header with link to full page */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900 capitalize">{neighbourhood.replace(/-/g, " ")}</h2>
+              <a
+                href={`/neighbourhood/${neighbourhood}`}
+                className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
+              >
+                Full neighbourhood page →
+              </a>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
               {statsLoading ? (
                 Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Copy, MessageCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { generateReportPdf } from "@/lib/report-pdf";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const riskColors: Record<string, string> = {
   low: "bg-green-100 text-green-800 border-green-200",
@@ -185,6 +186,16 @@ export default function ReportPage() {
     };
     duplicateListings?: Array<{ platform: string; url: string; priceKsh?: number; agentPhone?: string }>;
   };
+
+  usePageMeta(
+    reportData.fraudScore
+      ? {
+          title: `Fraud Report #${reportData.id}`,
+          description: `${input.slice(0, 80)} — NyumbaCheck fraud score: ${Math.round(reportData.fraudScore.score)}/100 (${reportData.fraudScore.riskLevel} risk). AI-powered property fraud analysis for Nairobi.`,
+          ogType: "article",
+        }
+      : { title: `Report #${reportData.id}` }
+  );
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const riskEmoji = { low: "🟢", medium: "🟡", high: "🟠", critical: "🔴" }[reportData.fraudScore?.riskLevel ?? ""] ?? "🔍";
