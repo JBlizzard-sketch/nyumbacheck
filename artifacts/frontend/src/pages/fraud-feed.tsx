@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Link } from "wouter";
@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageMeta } from "@/lib/use-page-meta";
 import {
-  Shield, AlertTriangle, CheckCircle, Clock, ArrowRight,
-  Filter, TrendingUp, Loader2
+  Shield, AlertTriangle, CheckCircle, ArrowRight,
+  Filter, TrendingUp, Loader2, MapPin, X
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -19,6 +19,7 @@ type FeedEntry = {
   score: number | null;
   signalCount: number;
   createdAt: string;
+  neighbourhood?: string | null;
 };
 
 const RISK_META = {
@@ -65,6 +66,12 @@ function FeedCard({ entry }: { entry: FeedEntry }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <Badge className={`text-xs border px-2 py-0.5 ${meta.bg}`}>{meta.icon} {meta.label} Risk</Badge>
+          {entry.neighbourhood && (
+            <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
+              <MapPin className="h-3 w-3 text-slate-400" />
+              {entry.neighbourhood}
+            </span>
+          )}
           <span className="text-xs text-slate-400">{timeAgo(entry.createdAt)}</span>
         </div>
         <p className="text-sm text-slate-600">
@@ -87,6 +94,7 @@ type Filter = typeof FILTERS[number];
 
 export default function FraudFeedPage() {
   const [filter, setFilter] = useState<Filter>("all");
+  const [nbhdFilter, setNbhdFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
 
@@ -108,16 +116,32 @@ export default function FraudFeedPage() {
     staleTime: 30_000,
   });
 
-  const reports = data?.reports ?? [];
+  const allReports = data?.reports ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  // Stats
+  // Unique neighbourhoods detected in this page's results
+  const uniqueNeighbourhoods = useMemo(() => {
+    const seen = new Set<string>();
+    allReports.forEach((r) => { if (r.neighbourhood) seen.add(r.neighbourhood); });
+    return Array.from(seen).sort();
+  }, [allReports]);
+
+  // Client-side neighbourhood filter (applied on top of server-side risk filter)
+  const reports = useMemo(
+    () => nbhdFilter === "all" ? allReports : allReports.filter((r) => r.neighbourhood === nbhdFilter),
+    [allReports, nbhdFilter],
+  );
+
+  // Stats computed from neighbourhood-filtered results
   const critCount = reports.filter((r) => r.riskLevel === "critical").length;
   const highCount = reports.filter((r) => r.riskLevel === "high").length;
   const avgScore = reports.length > 0
     ? Math.round(reports.reduce((a, r) => a + (r.score ?? 0), 0) / reports.length)
     : 0;
+
+  // Number of reports that have location data in this page
+  const locatedCount = allReports.filter((r) => r.neighbourhood).length;
 
   return (
     <Layout>
@@ -149,13 +173,13 @@ export default function FraudFeedPage() {
           ))}
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-2 mb-5 flex-wrap">
+        {/* Risk filter tabs */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <Filter className="h-4 w-4 text-slate-400 flex-shrink-0" />
           {FILTERS.map((f) => (
             <button
               key={f}
-              onClick={() => { setFilter(f); setPage(0); }}
+              onClick={() => { setFilter(f); setPage(0); setNbhdFilter("all"); }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition-colors ${
                 filter === f
                   ? "bg-primary text-white"
@@ -167,6 +191,52 @@ export default function FraudFeedPage() {
           ))}
         </div>
 
+        {/* Neighbourhood filter pills — only shown when locations are detected */}
+        {!isLoading && uniqueNeighbourhoods.length > 0 && (
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            <MapPin className="h-4 w-4 text-slate-400 flex-shrink-0" />
+            <button
+              onClick={() => setNbhdFilter("all")}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                nbhdFilter === "all"
+                  ? "bg-slate-700 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              All areas
+            </button>
+            {uniqueNeighbourhoods.map((nbhd) => (
+              <button
+                key={nbhd}
+                onClick={() => setNbhdFilter(nbhd)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  nbhdFilter === nbhd
+                    ? "bg-slate-700 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {nbhd}
+              </button>
+            ))}
+            {nbhdFilter !== "all" && (
+              <button
+                onClick={() => setNbhdFilter("all")}
+                className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="h-3 w-3" /> Clear
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Location coverage note */}
+        {!isLoading && locatedCount > 0 && locatedCount < allReports.length && (
+          <p className="text-xs text-slate-400 mb-4 flex items-center gap-1">
+            <MapPin className="h-3 w-3" />
+            {locatedCount} of {allReports.length} checks on this page have location data — neighbourhood is inferred from the listing address.
+          </p>
+        )}
+
         {/* Feed */}
         {isLoading ? (
           <div className="space-y-3">
@@ -175,7 +245,7 @@ export default function FraudFeedPage() {
         ) : reports.length === 0 ? (
           <div className="text-center py-16 text-slate-400">
             <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p>No {filter !== "all" ? `${filter}-risk ` : ""}checks yet.</p>
+            <p>No {nbhdFilter !== "all" ? `${nbhdFilter} ` : ""}{filter !== "all" ? `${filter}-risk ` : ""}checks yet.</p>
             <Link href="/check"><Button className="mt-4 gap-2">Run the first check <ArrowRight className="h-4 w-4" /></Button></Link>
           </div>
         ) : (

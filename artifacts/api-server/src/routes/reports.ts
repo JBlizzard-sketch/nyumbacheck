@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { reportRequestsTable, fraudScoresTable } from "@workspace/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -176,6 +176,41 @@ router.get("/reports/mine", async (req: Request, res: Response) => {
   }
 });
 
+// ── Neighbourhood detection ───────────────────────────────────────────────────
+
+const NBHD_KEYWORDS: Array<{ name: string; patterns: string[] }> = [
+  { name: "Westlands",   patterns: ["westland"] },
+  { name: "Kilimani",    patterns: ["kilimani"] },
+  { name: "Karen",       patterns: ["karen"] },
+  { name: "Kileleshwa",  patterns: ["kileleshwa"] },
+  { name: "Parklands",   patterns: ["parkland"] },
+  { name: "Lavington",   patterns: ["lavington"] },
+  { name: "Runda",       patterns: ["runda"] },
+  { name: "Muthaiga",    patterns: ["muthaiga"] },
+  { name: "South C",     patterns: ["south c", "south-c"] },
+  { name: "Kasarani",    patterns: ["kasarani"] },
+  { name: "Upperhill",   patterns: ["upperhill", "upper hill"] },
+  { name: "Embakasi",    patterns: ["embakasi"] },
+  { name: "Lang'ata",    patterns: ["lang'ata", "langata", "lang ata"] },
+  { name: "South B",     patterns: ["south b", "south-b"] },
+  { name: "Eastleigh",   patterns: ["eastleigh"] },
+  { name: "Thika Road",  patterns: ["thika road", "thika-road"] },
+  { name: "Ruaka",       patterns: ["ruaka"] },
+  { name: "Rongai",      patterns: ["rongai"] },
+  { name: "Ngong Road",  patterns: ["ngong road", "ngong-road"] },
+  { name: "Nairobi CBD", patterns: ["nairobi cbd", "cbd", "city centre", "city center"] },
+];
+
+function detectNeighbourhood(inputUrl: string | null, inputAddress: string | null): string | null {
+  const haystack = `${inputUrl ?? ""} ${inputAddress ?? ""}`.toLowerCase();
+  for (const { name, patterns } of NBHD_KEYWORDS) {
+    for (const pattern of patterns) {
+      if (haystack.includes(pattern)) return name;
+    }
+  }
+  return null;
+}
+
 // ── GET /reports/recent-public ────────────────────────────────────────────────
 // Anonymized feed of recent completed reports — no URLs, no emails, no addresses
 
@@ -183,39 +218,48 @@ router.get("/reports/recent-public", async (req: Request, res: Response) => {
   const limit = Math.min(50, Math.max(1, parseInt(String(req.query["limit"] ?? "20"), 10) || 20));
   const offset = Math.max(0, parseInt(String(req.query["offset"] ?? "0"), 10) || 0);
   const riskLevel = req.query["riskLevel"] as string | undefined;
+  const validRiskLevels = ["low", "medium", "high", "critical"];
 
   try {
-    const baseQuery = db
-      .select({
-        id: reportRequestsTable.id,
-        riskLevel: fraudScoresTable.riskLevel,
-        score: fraudScoresTable.score,
-        signals: fraudScoresTable.signals,
-        createdAt: reportRequestsTable.createdAt,
-      })
-      .from(reportRequestsTable)
-      .innerJoin(fraudScoresTable, eq(reportRequestsTable.fraudScoreId, fraudScoresTable.id))
-      .where(eq(reportRequestsTable.status, "complete"))
-      .orderBy(desc(reportRequestsTable.createdAt));
+    const statusCond = eq(reportRequestsTable.status, "complete");
+    const riskCond =
+      riskLevel && validRiskLevels.includes(riskLevel)
+        ? eq(fraudScoresTable.riskLevel, riskLevel as "low" | "medium" | "high" | "critical")
+        : undefined;
+    const whereClause = riskCond ? and(statusCond, riskCond) : statusCond;
 
     const [rows, [{ total }]] = await Promise.all([
-      baseQuery.limit(limit).offset(offset),
+      db
+        .select({
+          id: reportRequestsTable.id,
+          riskLevel: fraudScoresTable.riskLevel,
+          score: fraudScoresTable.score,
+          signals: fraudScoresTable.signals,
+          createdAt: reportRequestsTable.createdAt,
+          inputAddress: reportRequestsTable.inputAddress,
+          inputUrl: reportRequestsTable.inputUrl,
+        })
+        .from(reportRequestsTable)
+        .innerJoin(fraudScoresTable, eq(reportRequestsTable.fraudScoreId, fraudScoresTable.id))
+        .where(whereClause)
+        .orderBy(desc(reportRequestsTable.createdAt))
+        .limit(limit)
+        .offset(offset),
       db
         .select({ total: sql<number>`COUNT(*)` })
         .from(reportRequestsTable)
         .innerJoin(fraudScoresTable, eq(reportRequestsTable.fraudScoreId, fraudScoresTable.id))
-        .where(eq(reportRequestsTable.status, "complete")),
+        .where(whereClause),
     ]);
 
-    const reports = rows
-      .filter((r) => !riskLevel || r.riskLevel === riskLevel)
-      .map((r) => ({
-        id: r.id,
-        riskLevel: r.riskLevel,
-        score: r.score != null ? Math.round(r.score) : null,
-        signalCount: Array.isArray(r.signals) ? r.signals.length : 0,
-        createdAt: r.createdAt,
-      }));
+    const reports = rows.map((r) => ({
+      id: r.id,
+      riskLevel: r.riskLevel,
+      score: r.score != null ? Math.round(r.score) : null,
+      signalCount: Array.isArray(r.signals) ? r.signals.length : 0,
+      createdAt: r.createdAt,
+      neighbourhood: detectNeighbourhood(r.inputUrl, r.inputAddress),
+    }));
 
     res.json({ reports, total: Number(total) });
   } catch (err) {

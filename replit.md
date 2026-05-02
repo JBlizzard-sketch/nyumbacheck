@@ -1,5 +1,9 @@
 # NyumbaCheck — Real Estate Fraud Detection Platform
 
+## Phase 35 Complete
+- **Fraud Feed — neighbourhood detection + filter**: API `/recent-public` now infers neighbourhood from `inputAddress`/`inputUrl` via keyword matching against 20 Nairobi areas and returns it in the feed response. `FeedCard` shows a `MapPin + neighbourhood` pill badge on each card that has location data. Dynamic neighbourhood filter row auto-populates from detected areas in the current page; clicking a neighbourhood pill filters the feed client-side. Location coverage note shows how many of the current page's checks have inferred location data.
+- **Fixed riskLevel pagination bug**: The `recent-public` endpoint now applies the `riskLevel` filter in SQL (not in-memory JS), so the COUNT query and paginated results are accurate.
+
 ## Phase 22 Complete
 - **Mobile hamburger nav** — slide-in drawer from right (lg: breakpoint), active-link highlighting, body scroll lock, auto-closes on route change; all nav links + auth actions inside drawer
 - **Neighbourhood Detail Pages** (`/neighbourhood/:slug`) — shareable URL per neighbourhood; rent/sale toggle; 4-stat summary grid; fraud alert banner; 90-day area price trend chart; 90-day active listings chart; copy link + WhatsApp share; CTA to fraud check
