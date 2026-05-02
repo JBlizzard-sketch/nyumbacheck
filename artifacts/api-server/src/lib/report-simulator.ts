@@ -339,6 +339,26 @@ async function processReport(reportId: number): Promise<void> {
       { reportId, score: fraudData.score, riskLevel: fraudData.riskLevel },
       "report.simulation.complete"
     );
+
+    // ── 5. Send email notification (non-blocking, best-effort) ───────────────
+    if (report.email) {
+      const { sendReportEmail } = await import("./emailer");
+      sendReportEmail({
+        to: report.email,
+        reportId,
+        inputUrl: report.inputUrl,
+        inputAddress: report.inputAddress,
+        score: fraudData.score,
+        riskLevel: fraudData.riskLevel,
+        summary: fraudData.summary,
+        signals: fraudData.signals.map((s) => ({
+          label: s.label,
+          description: s.description,
+          contribution: s.contribution,
+        })),
+        platformCount: fraudData.platformCount,
+      }).catch((err) => logger.error({ err, reportId }, "report.email_fire_error"));
+    }
   } catch (err) {
     logger.error({ reportId, err }, "report.simulation.error");
 

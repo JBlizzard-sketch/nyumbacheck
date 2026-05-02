@@ -7,6 +7,7 @@ import marketRouter from "./market";
 import scammerRouter from "./scammer";
 import paymentsRouter from "./payments";
 import stripeRouter from "./stripe";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(marketRouter);
 router.use(scammerRouter);
 router.use("/payments", paymentsRouter);
 router.use("/payments", stripeRouter);
+router.use(adminRouter);
 
 export default router;

@@ -176,6 +176,35 @@ pnpm --filter @workspace/scripts exec tsx src/seed-products.ts  # seed Stripe pr
 - **Brand**: `--primary: 150 38% 16%` (#1a3a2a dark forest green)
 - **Stripe**: uses `stripe-replit-sync` — do NOT create tables in `stripe` schema, do NOT INSERT into stripe.* tables
 
+## Admin Dashboard
+
+- Route: `/admin` (frontend-only auth gate via Clerk + `VITE_ADMIN_EMAILS`)
+- If `VITE_ADMIN_EMAILS` is not set → all signed-in users have admin access
+- If set to `"user@example.com,admin@example.com"` → only those emails have access
+- Tabs: Overview (risk distribution chart, payment stats), Reports (live table), Scammers (confirm/unconfirm)
+- Auto-refreshes every 15–30s
+
+Admin API routes (all public aggregations):
+- `GET /admin/stats` — report counts by status, avg fraud score, risk distribution, scammer counts
+- `GET /admin/reports?limit=&offset=&status=` — paginated report list with joined fraud scores
+- `GET /admin/scammers` — full scammer registry ordered by report count
+- `POST /admin/scammers/:id/confirm` — toggle confirmed status `{ confirmed: boolean }`
+
+## Email Delivery (Resend)
+
+- File: `artifacts/api-server/src/lib/emailer.ts`
+- Sends branded HTML email on report completion (auto-wired into simulator)
+- Graceful no-op if `RESEND_API_KEY` is not set
+- To enable: set `RESEND_API_KEY` secret in Replit Secrets
+- From address: `reports@nyumbacheck.co.ke` (configure DNS in Resend dashboard)
+
+## Scammer Submission
+
+- `POST /scammer-registry/report` — public endpoint (no auth required)
+- Body: `{ phone, notes?, evidenceUrls? }`
+- Upserts: if number exists → increments `reportCount`; if new → creates entry with `isConfirmed: false`
+- Frontend: "Report a number to this registry" toggle on `/scammer` page
+
 ## Build Phases Completed
 
 - Phase 1: PostgreSQL schema (Drizzle ORM) — all tables
@@ -193,13 +222,14 @@ pnpm --filter @workspace/scripts exec tsx src/seed-products.ts  # seed Stripe pr
 - Phase 13: Report simulation engine (background worker, deterministic fraud scores, fake listings + clusters)
 - Phase 14: Bug fix — fetchFraudScoreData now uses `inArray` to fetch all cluster members
 - Phase 15: Stripe Checkout integration (stripe-replit-sync, webhook handler, checkout/confirm routes, payment gate on check.tsx, awaiting_payment status in report.tsx)
+- Phase 16: Email delivery (Resend, branded HTML, wired into simulator), Scammer submission form + API endpoint, Admin dashboard (stats, reports table, scammer registry management, confirm/unconfirm)
 
 ## Remaining Work
 
-- Email delivery of completed fraud reports (needs `RESEND_API_KEY` or alternative)
+- Set `RESEND_API_KEY` secret to enable email delivery
+- Set `VITE_ADMIN_EMAILS` to restrict admin dashboard access
 - Connect Stripe integration in Replit Integrations tab to enable live payments
 - Run `scripts/src/seed-products.ts` once after Stripe is connected
 - Python Celery pipeline wired to production Redis (currently simulation engine)
-- Admin dashboard (scrape job monitoring, fraud queue)
 - Price alert notifications (email/SMS when listing price drops)
-- OpenAPI spec update for Stripe checkout endpoint + client regeneration
+- OpenAPI spec update for Stripe + admin + scammer submission endpoints + client regeneration
