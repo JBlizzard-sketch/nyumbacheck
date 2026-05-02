@@ -8,11 +8,23 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ShieldCheck, Loader2, CreditCard, Smartphone, Lock, CheckCircle, AlertCircle } from "lucide-react";
+import { ShieldCheck, Loader2, CreditCard, Smartphone, Lock, CheckCircle, AlertCircle, Clock, X } from "lucide-react";
 import { addReportToLocalStorage } from "@/lib/local-storage";
 import { useUser } from "@clerk/react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const LS_RECENT_KEY = "nyumbacheck_recent_searches";
+const MAX_RECENT = 3;
+
+function loadRecentSearches(): string[] {
+  try { return JSON.parse(localStorage.getItem(LS_RECENT_KEY) ?? "[]") as string[]; }
+  catch { return []; }
+}
+
+function saveRecentSearch(value: string) {
+  const prev = loadRecentSearches().filter((v) => v !== value);
+  localStorage.setItem(LS_RECENT_KEY, JSON.stringify([value, ...prev].slice(0, MAX_RECENT)));
+}
 
 // ── M-Pesa waiting screen ─────────────────────────────────────────────────────
 
@@ -157,6 +169,7 @@ export default function CheckPage() {
   const [url, setUrl] = useState("");
   const [address, setAddress] = useState("");
   const [inputMode, setInputMode] = useState<"url" | "address">("url");
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
   const [paymentMethod, setPaymentMethod] = useState<"card" | "mpesa">("card");
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [mpesaWaiting, setMpesaWaiting] = useState<{
@@ -188,6 +201,10 @@ export default function CheckPage() {
       ...(inputMode === "url" ? { inputUrl: url } : { inputAddress: address }),
       ...(user?.id ? { userId: user.id } : {}),
     };
+
+    const searchValue = inputMode === "url" ? url : address;
+    saveRecentSearch(searchValue);
+    setRecentSearches(loadRecentSearches());
 
     submitReport.mutate(
       { data: payload },
@@ -275,6 +292,43 @@ export default function CheckPage() {
             Enter a listing URL or address to generate a comprehensive fraud risk report.
           </p>
         </div>
+
+        {/* Recent searches */}
+        {recentSearches.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs text-slate-500 font-medium mb-2 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" /> Recent checks
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {recentSearches.map((s) => (
+                <div key={s} className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 rounded-full px-3 py-1.5 text-xs text-slate-700 transition-colors max-w-[280px]">
+                  <button
+                    type="button"
+                    className="truncate text-left"
+                    onClick={() => {
+                      const isUrl = s.startsWith("http");
+                      setInputMode(isUrl ? "url" : "address");
+                      if (isUrl) setUrl(s); else setAddress(s);
+                    }}
+                  >
+                    {s}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-shrink-0 text-slate-400 hover:text-slate-600 ml-1"
+                    onClick={() => {
+                      const updated = recentSearches.filter((r) => r !== s);
+                      localStorage.setItem(LS_RECENT_KEY, JSON.stringify(updated));
+                      setRecentSearches(updated);
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <Card>
           <CardHeader>

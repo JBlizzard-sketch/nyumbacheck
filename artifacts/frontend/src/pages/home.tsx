@@ -3,10 +3,12 @@ import { Layout } from "@/components/layout";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ShieldAlert, Search, LineChart, ArrowRight, Copy, Phone,
   ImageOff, MapPin, Clock, BarChart3, ShieldCheck, Users,
-  AlertTriangle, TrendingUp, CheckCircle, ExternalLink
+  AlertTriangle, TrendingUp, CheckCircle, ExternalLink,
+  Radio
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -73,6 +75,85 @@ function formatKsh(v: number | null) {
   if (v >= 1_000_000) return `KSh ${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `KSh ${Math.round(v / 1_000)}K`;
   return `KSh ${v.toLocaleString()}`;
+}
+
+type FeedEntry = { id: number; riskLevel: "low" | "medium" | "high" | "critical" | null; score: number | null; signalCount: number; createdAt: string };
+const RISK_FEED_META = {
+  critical: { dot: "bg-red-500", label: "Critical", text: "text-red-600", icon: "🔴" },
+  high:     { dot: "bg-orange-500", label: "High", text: "text-orange-600", icon: "🟠" },
+  medium:   { dot: "bg-amber-400", label: "Medium", text: "text-amber-600", icon: "🟡" },
+  low:      { dot: "bg-green-500", label: "Low", text: "text-green-600", icon: "🟢" },
+};
+function feedTimeAgo(iso: string): string {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+function RecentFraudFeed() {
+  const { data, isLoading } = useQuery<{ reports: FeedEntry[] }>({
+    queryKey: ["home-fraud-feed"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/reports/recent-public?limit=6`);
+      if (!r.ok) throw new Error("feed unavailable");
+      return r.json() as Promise<{ reports: FeedEntry[] }>;
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+  const reports = data?.reports ?? [];
+  return (
+    <section className="py-16 bg-white px-4">
+      <div className="container mx-auto max-w-5xl">
+        <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-xs font-semibold text-red-600 uppercase tracking-wider">Live Feed</span>
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900">Recent Fraud Alerts</h2>
+            <p className="text-slate-500 text-sm mt-1">Anonymized results from recent property checks — updated in real time.</p>
+          </div>
+          <Link href="/fraud-feed">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Radio className="h-3.5 w-3.5 text-red-500" /> View full feed <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </div>
+        {isLoading ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : reports.length === 0 ? (
+          <div className="text-center py-10 text-slate-400">
+            <CheckCircle className="h-10 w-10 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No completed checks yet — be the first!</p>
+            <Link href="/check"><Button size="sm" className="mt-3">Check a Property</Button></Link>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {reports.map((entry) => {
+              const meta = RISK_FEED_META[entry.riskLevel ?? "low"] ?? RISK_FEED_META.low;
+              return (
+                <div key={entry.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4 flex flex-col gap-2 hover:border-slate-200 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+                    <span className={`text-xs font-semibold ${meta.text}`}>{meta.icon} {meta.label} Risk</span>
+                    <span className="text-xs text-slate-400 ml-auto">{feedTimeAgo(entry.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-slate-700">
+                    Score <span className={`font-bold ${meta.text}`}>{entry.score ?? "—"}/100</span>
+                    {" · "}<span className="text-slate-500">{entry.signalCount} signal{entry.signalCount !== 1 ? "s" : ""}</span>
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
 }
 
 const SIGNALS = [
@@ -381,6 +462,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Recent Fraud Alerts feed */}
+      <RecentFraudFeed />
 
       {/* Fraud signals */}
       <section className="py-20 bg-slate-50 px-4">

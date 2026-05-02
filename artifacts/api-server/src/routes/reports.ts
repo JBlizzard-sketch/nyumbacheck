@@ -1,8 +1,8 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { reportRequestsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { reportRequestsTable, fraudScoresTable } from "@workspace/db/schema";
+import { eq, desc, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -172,6 +172,54 @@ router.get("/reports/mine", async (req: Request, res: Response) => {
     res.json({ reports });
   } catch (err) {
     logger.error({ err }, "report.mine_error");
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// ── GET /reports/recent-public ────────────────────────────────────────────────
+// Anonymized feed of recent completed reports — no URLs, no emails, no addresses
+
+router.get("/reports/recent-public", async (req: Request, res: Response) => {
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query["limit"] ?? "20"), 10) || 20));
+  const offset = Math.max(0, parseInt(String(req.query["offset"] ?? "0"), 10) || 0);
+  const riskLevel = req.query["riskLevel"] as string | undefined;
+
+  try {
+    const baseQuery = db
+      .select({
+        id: reportRequestsTable.id,
+        riskLevel: fraudScoresTable.riskLevel,
+        score: fraudScoresTable.score,
+        signals: fraudScoresTable.signals,
+        createdAt: reportRequestsTable.createdAt,
+      })
+      .from(reportRequestsTable)
+      .innerJoin(fraudScoresTable, eq(reportRequestsTable.fraudScoreId, fraudScoresTable.id))
+      .where(eq(reportRequestsTable.status, "complete"))
+      .orderBy(desc(reportRequestsTable.createdAt));
+
+    const [rows, [{ total }]] = await Promise.all([
+      baseQuery.limit(limit).offset(offset),
+      db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(reportRequestsTable)
+        .innerJoin(fraudScoresTable, eq(reportRequestsTable.fraudScoreId, fraudScoresTable.id))
+        .where(eq(reportRequestsTable.status, "complete")),
+    ]);
+
+    const reports = rows
+      .filter((r) => !riskLevel || r.riskLevel === riskLevel)
+      .map((r) => ({
+        id: r.id,
+        riskLevel: r.riskLevel,
+        score: r.score != null ? Math.round(r.score) : null,
+        signalCount: Array.isArray(r.signals) ? r.signals.length : 0,
+        createdAt: r.createdAt,
+      }));
+
+    res.json({ reports, total: Number(total) });
+  } catch (err) {
+    logger.error({ err }, "report.recent_public_error");
     res.status(500).json({ error: "internal_error" });
   }
 });
