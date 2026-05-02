@@ -12,7 +12,7 @@ const router: IRouter = Router();
 const SubmitReportSchema = z.object({
   inputUrl: z.string().url().optional(),
   inputAddress: z.string().min(5).optional(),
-  email: z.email(),
+  email: z.string().email(),
 }).refine(
   (d) => d.inputUrl || d.inputAddress,
   { message: "Either inputUrl or inputAddress must be provided" }
