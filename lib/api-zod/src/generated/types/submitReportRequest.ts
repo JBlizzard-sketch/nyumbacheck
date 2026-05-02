@@ -16,4 +16,6 @@ export interface SubmitReportRequest {
   inputAddress?: string;
   /** Email address to receive the report */
   email: string;
+  /** Clerk user ID — links the report to an account for My Reports */
+  userId?: string | null;
 }

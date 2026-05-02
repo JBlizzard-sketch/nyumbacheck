@@ -9,6 +9,7 @@ import paymentsRouter from "./payments";
 import stripeRouter from "./stripe";
 import adminRouter from "./admin";
 import alertsRouter from "./alerts";
+import { verifyRouter } from "./verify";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use("/payments", paymentsRouter);
 router.use("/payments", stripeRouter);
 router.use(adminRouter);
 router.use(alertsRouter);
+router.use(verifyRouter);
 
 export default router;

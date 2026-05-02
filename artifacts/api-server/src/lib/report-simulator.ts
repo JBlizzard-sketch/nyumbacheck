@@ -371,8 +371,115 @@ async function processReport(reportId: number): Promise<void> {
 
 // ── Background worker ─────────────────────────────────────────────────────────
 
-const PENDING_DELAY_MS = 15_000;   // transition pending → processing after 15s
+const PENDING_DELAY_MS = 15_000;    // transition pending → processing after 15s
 const PROCESSING_DELAY_MS = 30_000; // transition processing → complete after 30s
+const ALERT_CHECK_INTERVAL_MS = 5 * 60 * 1000; // check price alerts every 5 minutes
+
+// ── Price alert checker ───────────────────────────────────────────────────────
+
+async function checkPriceAlerts(): Promise<void> {
+  try {
+    const { priceAlertsTable } = await import("@workspace/db/schema");
+    const { sendPriceAlertEmail } = await import("./emailer");
+
+    // Fetch all active search_alerts that have a neighbourhood + listingType
+    const activeAlerts = await db
+      .select()
+      .from(priceAlertsTable)
+      .where(
+        and(
+          eq(priceAlertsTable.isActive, true),
+          eq(priceAlertsTable.alertType, "search_alert"),
+          sql`${priceAlertsTable.neighbourhood} IS NOT NULL`,
+          sql`${priceAlertsTable.email} IS NOT NULL`,
+        )
+      )
+      .limit(100);
+
+    if (activeAlerts.length === 0) return;
+
+    const now = new Date();
+    // Only check alerts that haven't triggered in the last 24 hours (avoid spam)
+    const eligibleAlerts = activeAlerts.filter((a) => {
+      if (!a.lastTriggeredAt) return true;
+      const hoursAgo = (now.getTime() - new Date(a.lastTriggeredAt).getTime()) / (1000 * 60 * 60);
+      return hoursAgo >= 24;
+    });
+
+    if (eligibleAlerts.length === 0) return;
+
+    // For each eligible alert, check if any listings match
+    for (const alert of eligibleAlerts) {
+      try {
+        const conditions: Parameters<typeof and>[0][] = [
+          eq(rawListingsTable.isActive, true),
+          sql`LOWER(${rawListingsTable.neighbourhood}) = LOWER(${alert.neighbourhood!})`,
+        ];
+
+        if (alert.listingType) {
+          conditions.push(eq(rawListingsTable.listingType, alert.listingType));
+        }
+        if (alert.maxPriceKsh) {
+          conditions.push(sql`${rawListingsTable.priceKsh} <= ${alert.maxPriceKsh}`);
+        }
+        if (alert.minBedrooms) {
+          conditions.push(sql`${rawListingsTable.bedrooms} >= ${alert.minBedrooms}`);
+        }
+
+        // Look for listings created in the last 5 minutes (new matches since last check)
+        const cutoff = new Date(now.getTime() - ALERT_CHECK_INTERVAL_MS * 1.5);
+        conditions.push(sql`${rawListingsTable.firstSeenAt} >= ${cutoff}`);
+
+        const matchingListings = await db
+          .select({
+            id: rawListingsTable.id,
+            url: rawListingsTable.url,
+            title: rawListingsTable.title,
+            priceKsh: rawListingsTable.priceKsh,
+            bedrooms: rawListingsTable.bedrooms,
+            neighbourhood: rawListingsTable.neighbourhood,
+            listingType: rawListingsTable.listingType,
+          })
+          .from(rawListingsTable)
+          .where(and(...conditions))
+          .limit(5);
+
+        if (matchingListings.length === 0) continue;
+
+        // Send alert email
+        await sendPriceAlertEmail({
+          to: alert.email!,
+          neighbourhood: alert.neighbourhood!,
+          listingType: (alert.listingType as "rent" | "sale") ?? "rent",
+          maxPriceKsh: alert.maxPriceKsh,
+          minBedrooms: alert.minBedrooms,
+          matchCount: matchingListings.length,
+          listings: matchingListings.map((l) => ({
+            url: l.url,
+            title: l.title ?? `${l.bedrooms ?? "?"} BR ${l.listingType}`,
+            priceKsh: l.priceKsh,
+            neighbourhood: l.neighbourhood ?? alert.neighbourhood!,
+          })),
+        });
+
+        // Update lastTriggeredAt
+        await db
+          .update(priceAlertsTable)
+          .set({ lastTriggeredAt: now, updatedAt: now })
+          .where(eq(priceAlertsTable.id, alert.id));
+
+        logger.info(
+          { alertId: alert.id, matchCount: matchingListings.length, email: alert.email },
+          "alert.triggered"
+        );
+      } catch (alertErr) {
+        logger.error({ alertErr, alertId: alert.id }, "alert.check_error");
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, "alert.checker.tick_error");
+  }
+}
 
 export function startReportSimulator(): void {
   logger.info("report.simulator.started");
@@ -423,4 +530,9 @@ export function startReportSimulator(): void {
       logger.error({ err }, "report.simulator.tick_error");
     }
   }, 8_000);
+
+  // Every 5 minutes: check price alerts and send email notifications
+  setInterval(checkPriceAlerts, ALERT_CHECK_INTERVAL_MS);
+  // Also run once after 30s startup delay
+  setTimeout(checkPriceAlerts, 30_000);
 }

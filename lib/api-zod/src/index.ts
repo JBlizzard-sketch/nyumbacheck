@@ -1,2 +1,35 @@
 export * from "./generated/api";
-export * from "./generated/types";
+// Re-export only types that are NOT already exported as Zod schema constants from api.ts.
+// Orval generates the same member name for both the Zod schema (in api.ts) and the TypeScript
+// type (in types/). We prefer the Zod schema export; exclude duplicates from the types barrel.
+export type {
+  AgentDetail,
+  AgentsPage,
+  AgentSummary,
+  ApiError,
+  ApiErrorDetails,
+  CreateAlert201,
+  CreateAlertRequest,
+  CreateAlertRequestAlertType,
+  CreateAlertRequestListingType,
+  DuplicateListing,
+  FraudScoreSummary,
+  FraudScoreSummaryRiskLevel,
+  FraudSignal,
+  GetMarketStatsListingType,
+  GetMarketTrendsListingType,
+  HealthStatus,
+  ListingDetail,
+  ListingsPage,
+  ListingSummary,
+  MarketStats,
+  MarketTrendPoint,
+  MarketTrends,
+  MyReportSummary,
+  Neighbourhood,
+  PriceAlert,
+  ReportRequestSummary,
+  ReportResponse,
+  ScammerLookupResult,
+  ScammerReportRequest,
+} from "./generated/types/index";

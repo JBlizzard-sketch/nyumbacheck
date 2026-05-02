@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock } from "lucide-react";
+import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Share2, Copy, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const riskColors: Record<string, string> = {
@@ -185,18 +185,46 @@ export default function ReportPage() {
     duplicateListings?: Array<{ platform: string; url: string; priceKsh?: number; agentPhone?: string }>;
   };
 
+  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const riskEmoji = { low: "🟢", medium: "🟡", high: "🟠", critical: "🔴" }[reportData.fraudScore?.riskLevel ?? ""] ?? "🔍";
+  const waText = reportData.fraudScore
+    ? `NyumbaCheck fraud report for ${input.slice(0, 60)}: ${Math.round(reportData.fraudScore.score)}/100 risk score (${reportData.fraudScore.riskLevel.toUpperCase()}). ${riskEmoji} Check it: ${shareUrl}`
+    : `NyumbaCheck analysis in progress for ${input.slice(0, 60)}. Check it: ${shareUrl}`;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(shareUrl).then(() => toast.success("Link copied to clipboard")).catch(() => toast.error("Could not copy link"));
+  }
+
+  function handleWhatsApp() {
+    window.open(`https://wa.me/?text=${encodeURIComponent(waText)}`, "_blank", "noopener");
+  }
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-12 max-w-4xl space-y-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            {statusIcon}
-            <span className="text-sm font-medium capitalize text-slate-600">
-              {reportData.status === "awaiting_payment" ? "Awaiting Payment" : reportData.status}
-            </span>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {statusIcon}
+              <span className="text-sm font-medium capitalize text-slate-600">
+                {reportData.status === "awaiting_payment" ? "Awaiting Payment" : reportData.status}
+              </span>
+            </div>
+            <h1 className="text-3xl font-bold text-slate-900">Fraud Analysis Report #{reportData.id}</h1>
+            <p className="text-slate-500 mt-1 text-sm truncate max-w-lg">{input}</p>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900">Fraud Analysis Report #{reportData.id}</h1>
-          <p className="text-slate-500 mt-1 text-sm truncate max-w-lg">{input}</p>
+          <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+            <Button variant="outline" size="sm" className="gap-1.5 h-9" onClick={handleCopy}>
+              <Copy className="h-3.5 w-3.5" /> Copy link
+            </Button>
+            <Button
+              size="sm"
+              className="gap-1.5 h-9 bg-[#25D366] hover:bg-[#128C7E] text-white border-0"
+              onClick={handleWhatsApp}
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> Share
+            </Button>
+          </div>
         </div>
 
         {/* Payment cancelled */}
@@ -252,17 +280,93 @@ export default function ReportPage() {
           </Card>
         )}
 
-        {/* Analysis in progress */}
+        {/* Analysis in progress — progress stepper */}
         {(reportData.status === "pending" || reportData.status === "processing") && (
           <Card className="border-blue-200 bg-blue-50">
-            <CardContent className="pt-6 flex items-center gap-3">
-              <Clock className="h-6 w-6 text-blue-500 flex-shrink-0 animate-pulse" />
-              <div>
+            <CardContent className="pt-6 pb-6">
+              <div className="flex items-center gap-2 mb-5">
+                <Loader2 className="h-5 w-5 text-blue-500 animate-spin flex-shrink-0" />
                 <p className="font-semibold text-blue-800">Analysis in progress</p>
-                <p className="text-sm text-blue-600">
-                  We are scanning multiple platforms and running fraud checks. This takes 3–7 minutes.
-                </p>
               </div>
+              <ol className="relative ml-2 space-y-0">
+                {([
+                  {
+                    label: "Report queued",
+                    sub: "Payment verified, job added to pipeline",
+                    done: true,
+                    icon: CheckCircle,
+                  },
+                  {
+                    label: "Cross-platform scan",
+                    sub: "Checking BuyRentKenya, Jiji, Jumia House, PropertySearch…",
+                    done: reportData.status === "processing",
+                    active: reportData.status === "pending",
+                    icon: Search,
+                  },
+                  {
+                    label: "Fraud signal analysis",
+                    sub: "Running price anomaly, image hash, agent phone checks",
+                    done: false,
+                    active: reportData.status === "processing",
+                    icon: FileCheck,
+                  },
+                  {
+                    label: "Report ready",
+                    sub: "Results delivered on this page and by email",
+                    done: false,
+                    icon: CheckCircle,
+                  },
+                ] as Array<{ label: string; sub: string; done: boolean; active?: boolean; icon: React.ElementType }>).map(
+                  (step, i, arr) => {
+                    const Icon = step.icon;
+                    return (
+                      <li key={i} className="flex gap-3 pb-0">
+                        <div className="flex flex-col items-center">
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 border-2 transition-colors ${
+                              step.done
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : step.active
+                                ? "bg-white border-blue-500 text-blue-500"
+                                : "bg-white border-slate-200 text-slate-300"
+                            }`}
+                          >
+                            {step.active ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Icon className="h-3.5 w-3.5" />
+                            )}
+                          </div>
+                          {i < arr.length - 1 && (
+                            <div
+                              className={`w-0.5 h-8 mt-1 mb-1 ${
+                                step.done ? "bg-blue-400" : "bg-slate-200"
+                              }`}
+                            />
+                          )}
+                        </div>
+                        <div className="pt-0.5 pb-6">
+                          <p
+                            className={`text-sm font-semibold ${
+                              step.done
+                                ? "text-blue-800"
+                                : step.active
+                                ? "text-blue-700"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {step.label}
+                          </p>
+                          <p className={`text-xs mt-0.5 ${step.done || step.active ? "text-blue-600" : "text-slate-400"}`}>
+                            {step.sub}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  },
+                )}
+              </ol>
+              <p className="text-xs text-blue-600 mt-1 ml-1">This page refreshes automatically every 3 seconds.</p>
             </CardContent>
           </Card>
         )}

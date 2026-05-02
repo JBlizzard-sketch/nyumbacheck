@@ -234,6 +234,7 @@ Admin API routes (all public aggregations):
 - Phase 15: Stripe Checkout integration (stripe-replit-sync, webhook handler, checkout/confirm routes, payment gate on check.tsx, awaiting_payment status in report.tsx)
 - Phase 16: Email delivery (Resend, branded HTML, wired into simulator), Scammer submission form + API endpoint, Admin dashboard (stats, reports table, scammer registry management, confirm/unconfirm)
 - Phase 17: Enhanced home page (live stats bar, 6 fraud signals explainer, CTA section), server-side My Reports (userId saved on submit, GET /reports/mine, merged with localStorage), price alerts (POST/GET/DELETE /alerts, market page UI with inline form + alert management)
+- Phase 18: OpenAPI spec fully updated (GET /reports/mine, DELETE /alerts/{id}, POST /scammer-registry/report, admin, verify endpoints + MyReportSummary/ScammerReportRequest schemas), codegen regenerated React Query hooks. Report progress stepper (4-step visual pipeline). Price alert background checker (5-min interval, sends Resend emails when new listings match criteria). Share report buttons (Copy link + WhatsApp with pre-filled fraud score message). Trust Badge /verify page (landlord verification landing page + POST/GET /verify API). Route order bug fixed (GET /reports/mine now before GET /reports/:id). Footer rebuilt with 3-column links. "Get Verified" added to nav. GitHub pushed: commit 3d0ccd9.
 
 ## Remaining Work
 

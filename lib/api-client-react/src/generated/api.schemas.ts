@@ -27,6 +27,8 @@ export interface SubmitReportRequest {
   inputAddress?: string;
   /** Email address to receive the report */
   email: string;
+  /** Clerk user ID — links the report to an account for My Reports */
+  userId?: string | null;
 }
 
 export type ReportRequestSummaryStatus =
@@ -324,6 +326,46 @@ export interface CreateAlertRequest {
   maxPriceKsh?: number | null;
 }
 
+export type MyReportSummaryStatus =
+  (typeof MyReportSummaryStatus)[keyof typeof MyReportSummaryStatus];
+
+export const MyReportSummaryStatus = {
+  pending: "pending",
+  processing: "processing",
+  complete: "complete",
+  failed: "failed",
+  awaiting_payment: "awaiting_payment",
+} as const;
+
+export type MyReportSummaryRiskLevel =
+  | (typeof MyReportSummaryRiskLevel)[keyof typeof MyReportSummaryRiskLevel]
+  | null;
+
+export const MyReportSummaryRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export interface MyReportSummary {
+  id: number;
+  inputUrl?: string | null;
+  inputAddress?: string | null;
+  email: string;
+  status: MyReportSummaryStatus;
+  createdAt: string;
+  score?: number | null;
+  riskLevel?: MyReportSummaryRiskLevel;
+}
+
+export interface ScammerReportRequest {
+  /** Phone number to report (any format — will be normalised) */
+  phone: string;
+  notes?: string | null;
+  reporterEmail?: string | null;
+}
+
 export interface ScammerLookupResult {
   phone: string;
   normalisedPhone: string;
@@ -413,8 +455,34 @@ export const GetMarketTrendsListingType = {
   sale: "sale",
 } as const;
 
+export type GetMyReportsParams = {
+  /**
+   * Clerk user ID
+   */
+  userId: string;
+};
+
+export type GetMyReports200 = {
+  reports: MyReportSummary[];
+};
+
+export type ListAlertsParams = {
+  userId: string;
+};
+
 export type ListAlerts200 = {
   alerts: PriceAlert[];
+};
+
+export type CreateAlert201 = {
+  alert: PriceAlert;
+};
+
+export type DeleteAlertParams = {
+  /**
+   * Must match the alert owner
+   */
+  userId: string;
 };
 
 export type LookupScammerParams = {

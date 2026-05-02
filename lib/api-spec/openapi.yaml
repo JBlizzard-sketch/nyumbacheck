@@ -334,6 +334,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/MarketTrends"
 
+  /reports/mine:
+    get:
+      operationId: getMyReports
+      tags: [reports]
+      summary: Get all reports submitted by a user
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Clerk user ID
+      responses:
+        "200":
+          description: Reports list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MyReportSummary"
+                required: [reports]
+        "400":
+          description: Missing userId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   # ── Alerts ─────────────────────────────────────────────────────────────────
 
   /alerts:
@@ -341,6 +373,12 @@ paths:
       operationId: listAlerts
       tags: [alerts]
       summary: List user price and listing alerts
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
       responses:
         "200":
           description: Alerts list
@@ -371,7 +409,44 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PriceAlert"
+                type: object
+                properties:
+                  alert:
+                    $ref: "#/components/schemas/PriceAlert"
+                required: [alert]
+
+  /alerts/{id}:
+    delete:
+      operationId: deleteAlert
+      tags: [alerts]
+      summary: Deactivate a price alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Must match the alert owner
+      responses:
+        "200":
+          description: Alert deactivated
+        "403":
+          description: Not your alert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   # ── Scammer Registry ────────────────────────────────────────────────────────
 
@@ -394,6 +469,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScammerLookupResult"
+
+  /scammer-registry/report:
+    post:
+      operationId: reportScammer
+      tags: [scammer-registry]
+      summary: Submit a scammer phone number report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScammerReportRequest"
+      responses:
+        "201":
+          description: Report recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScammerLookupResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
 components:
   schemas:
@@ -437,6 +537,10 @@ components:
           type: string
           format: email
           description: Email address to receive the report
+        userId:
+          type: string
+          nullable: true
+          description: Clerk user ID — links the report to an account for My Reports
       required:
         - email
       description: Either inputUrl or inputAddress must be provided
@@ -982,6 +1086,54 @@ components:
       required:
         - alertType
         - email
+
+    MyReportSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        inputUrl:
+          type: string
+          nullable: true
+        inputAddress:
+          type: string
+          nullable: true
+        email:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, complete, failed, awaiting_payment]
+        createdAt:
+          type: string
+          format: date-time
+        score:
+          type: number
+          nullable: true
+        riskLevel:
+          type: string
+          nullable: true
+          enum: [low, medium, high, critical]
+      required:
+        - id
+        - email
+        - status
+        - createdAt
+
+    ScammerReportRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          description: Phone number to report (any format — will be normalised)
+        notes:
+          type: string
+          nullable: true
+        reporterEmail:
+          type: string
+          format: email
+          nullable: true
+      required:
+        - phone
 
     # ── Scammer Registry ────────────────────────────────────────────────────
 

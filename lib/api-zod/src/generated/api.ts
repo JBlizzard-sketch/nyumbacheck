@@ -33,6 +33,12 @@ export const SubmitReportBody = zod
       .optional()
       .describe("Property address or description to check"),
     email: zod.string().email().describe("Email address to receive the report"),
+    userId: zod
+      .string()
+      .nullish()
+      .describe(
+        "Clerk user ID — links the report to an account for My Reports",
+      ),
   })
   .describe("Either inputUrl or inputAddress must be provided");
 
@@ -383,8 +389,40 @@ export const GetMarketTrendsResponse = zod.object({
 });
 
 /**
+ * @summary Get all reports submitted by a user
+ */
+export const GetMyReportsQueryParams = zod.object({
+  userId: zod.coerce.string().describe("Clerk user ID"),
+});
+
+export const GetMyReportsResponse = zod.object({
+  reports: zod.array(
+    zod.object({
+      id: zod.number(),
+      inputUrl: zod.string().nullish(),
+      inputAddress: zod.string().nullish(),
+      email: zod.string(),
+      status: zod.enum([
+        "pending",
+        "processing",
+        "complete",
+        "failed",
+        "awaiting_payment",
+      ]),
+      createdAt: zod.coerce.date(),
+      score: zod.number().nullish(),
+      riskLevel: zod.enum(["low", "medium", "high", "critical"]).nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary List user price and listing alerts
  */
+export const ListAlertsQueryParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
 export const ListAlertsResponse = zod.object({
   alerts: zod.array(
     zod.object({
@@ -423,6 +461,17 @@ export const CreateAlertBody = zod.object({
 });
 
 /**
+ * @summary Deactivate a price alert
+ */
+export const DeleteAlertParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteAlertQueryParams = zod.object({
+  userId: zod.coerce.string().describe("Must match the alert owner"),
+});
+
+/**
  * @summary Check if a phone number is in the scammer registry
  */
 export const LookupScammerQueryParams = zod.object({
@@ -439,4 +488,15 @@ export const LookupScammerResponse = zod.object({
   linkedListingCount: zod.number().nullish(),
   isConfirmed: zod.boolean().nullish(),
   notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Submit a scammer phone number report
+ */
+export const ReportScammerBody = zod.object({
+  phone: zod
+    .string()
+    .describe("Phone number to report (any format — will be normalised)"),
+  notes: zod.string().nullish(),
+  reporterEmail: zod.string().email().nullish(),
 });

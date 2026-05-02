@@ -20,12 +20,17 @@ import type {
   AgentDetail,
   AgentsPage,
   ApiError,
+  CreateAlert201,
   CreateAlertRequest,
+  DeleteAlertParams,
   GetMarketStatsParams,
   GetMarketTrendsParams,
+  GetMyReports200,
+  GetMyReportsParams,
   HealthStatus,
   ListAgentsParams,
   ListAlerts200,
+  ListAlertsParams,
   ListListingsParams,
   ListNeighbourhoods200,
   ListingDetail,
@@ -33,10 +38,10 @@ import type {
   LookupScammerParams,
   MarketStats,
   MarketTrends,
-  PriceAlert,
   ReportRequestSummary,
   ReportResponse,
   ScammerLookupResult,
+  ScammerReportRequest,
   SubmitReportRequest,
 } from "./api.schemas";
 
@@ -924,43 +929,153 @@ export function useGetMarketTrends<
 }
 
 /**
- * @summary List user price and listing alerts
+ * @summary Get all reports submitted by a user
  */
-export const getListAlertsUrl = () => {
-  return `/api/alerts`;
+export const getGetMyReportsUrl = (params: GetMyReportsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reports/mine?${stringifiedParams}`
+    : `/api/reports/mine`;
 };
 
-export const listAlerts = async (
+export const getMyReports = async (
+  params: GetMyReportsParams,
   options?: RequestInit,
-): Promise<ListAlerts200> => {
-  return customFetch<ListAlerts200>(getListAlertsUrl(), {
+): Promise<GetMyReports200> => {
+  return customFetch<GetMyReports200>(getGetMyReportsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListAlertsQueryKey = () => {
-  return [`/api/alerts`] as const;
+export const getGetMyReportsQueryKey = (params?: GetMyReportsParams) => {
+  return [`/api/reports/mine`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyReports>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetMyReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyReportsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyReports>>> = ({
+    signal,
+  }) => getMyReports(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyReports>>
+>;
+export type GetMyReportsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Get all reports submitted by a user
+ */
+
+export function useGetMyReports<
+  TData = Awaited<ReturnType<typeof getMyReports>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetMyReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyReportsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List user price and listing alerts
+ */
+export const getListAlertsUrl = (params: ListAlertsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/alerts?${stringifiedParams}`
+    : `/api/alerts`;
+};
+
+export const listAlerts = async (
+  params: ListAlertsParams,
+  options?: RequestInit,
+): Promise<ListAlerts200> => {
+  return customFetch<ListAlerts200>(getListAlertsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAlertsQueryKey = (params?: ListAlertsParams) => {
+  return [`/api/alerts`, ...(params ? [params] : [])] as const;
 };
 
 export const getListAlertsQueryOptions = <
   TData = Awaited<ReturnType<typeof listAlerts>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listAlerts>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params: ListAlertsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAlerts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListAlertsQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getListAlertsQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listAlerts>>> = ({
     signal,
-  }) => listAlerts({ signal, ...requestOptions });
+  }) => listAlerts(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listAlerts>>,
@@ -981,15 +1096,18 @@ export type ListAlertsQueryError = ErrorType<unknown>;
 export function useListAlerts<
   TData = Awaited<ReturnType<typeof listAlerts>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listAlerts>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListAlertsQueryOptions(options);
+>(
+  params: ListAlertsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAlerts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAlertsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -1008,8 +1126,8 @@ export const getCreateAlertUrl = () => {
 export const createAlert = async (
   createAlertRequest: CreateAlertRequest,
   options?: RequestInit,
-): Promise<PriceAlert> => {
-  return customFetch<PriceAlert>(getCreateAlertUrl(), {
+): Promise<CreateAlert201> => {
+  return customFetch<CreateAlert201>(getCreateAlertUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -1082,6 +1200,103 @@ export const useCreateAlert = <
   TContext
 > => {
   return useMutation(getCreateAlertMutationOptions(options));
+};
+
+/**
+ * @summary Deactivate a price alert
+ */
+export const getDeleteAlertUrl = (id: number, params: DeleteAlertParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/alerts/${id}?${stringifiedParams}`
+    : `/api/alerts/${id}`;
+};
+
+export const deleteAlert = async (
+  id: number,
+  params: DeleteAlertParams,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteAlertUrl(id, params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteAlertMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAlert>>,
+    TError,
+    { id: number; params: DeleteAlertParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteAlert>>,
+  TError,
+  { id: number; params: DeleteAlertParams },
+  TContext
+> => {
+  const mutationKey = ["deleteAlert"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteAlert>>,
+    { id: number; params: DeleteAlertParams }
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return deleteAlert(id, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteAlertMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteAlert>>
+>;
+
+export type DeleteAlertMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Deactivate a price alert
+ */
+export const useDeleteAlert = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteAlert>>,
+    TError,
+    { id: number; params: DeleteAlertParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteAlert>>,
+  TError,
+  { id: number; params: DeleteAlertParams },
+  TContext
+> => {
+  return useMutation(getDeleteAlertMutationOptions(options));
 };
 
 /**
@@ -1177,3 +1392,89 @@ export function useLookupScammer<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Submit a scammer phone number report
+ */
+export const getReportScammerUrl = () => {
+  return `/api/scammer-registry/report`;
+};
+
+export const reportScammer = async (
+  scammerReportRequest: ScammerReportRequest,
+  options?: RequestInit,
+): Promise<ScammerLookupResult> => {
+  return customFetch<ScammerLookupResult>(getReportScammerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(scammerReportRequest),
+  });
+};
+
+export const getReportScammerMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reportScammer>>,
+    TError,
+    { data: BodyType<ScammerReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reportScammer>>,
+  TError,
+  { data: BodyType<ScammerReportRequest> },
+  TContext
+> => {
+  const mutationKey = ["reportScammer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reportScammer>>,
+    { data: BodyType<ScammerReportRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return reportScammer(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReportScammerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reportScammer>>
+>;
+export type ReportScammerMutationBody = BodyType<ScammerReportRequest>;
+export type ReportScammerMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Submit a scammer phone number report
+ */
+export const useReportScammer = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reportScammer>>,
+    TError,
+    { data: BodyType<ScammerReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reportScammer>>,
+  TError,
+  { data: BodyType<ScammerReportRequest> },
+  TContext
+> => {
+  return useMutation(getReportScammerMutationOptions(options));
+};

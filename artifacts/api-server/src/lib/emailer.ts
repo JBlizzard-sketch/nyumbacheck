@@ -130,6 +130,115 @@ function buildReportEmail(data: ReportEmailData): { subject: string; html: strin
   return { subject, html };
 }
 
+// ── Price alert email ─────────────────────────────────────────────────────────
+
+type PriceAlertEmailData = {
+  to: string;
+  neighbourhood: string;
+  listingType: "rent" | "sale";
+  maxPriceKsh?: number | null;
+  minBedrooms?: number | null;
+  matchCount: number;
+  listings: Array<{
+    url: string;
+    title: string;
+    priceKsh?: number | null;
+    neighbourhood: string;
+  }>;
+};
+
+function formatKsh(val: number | null | undefined): string {
+  if (val == null) return "—";
+  if (val >= 1_000_000) return `KSh ${(val / 1_000_000).toFixed(1)}M`;
+  if (val >= 1_000) return `KSh ${(val / 1_000).toFixed(0)}K`;
+  return `KSh ${val.toLocaleString()}`;
+}
+
+export async function sendPriceAlertEmail(data: PriceAlertEmailData): Promise<void> {
+  const apiKey = process.env["RESEND_API_KEY"];
+
+  if (!apiKey) {
+    logger.info({ to: data.to, neighbourhood: data.neighbourhood }, "alert_email.skipped_no_api_key");
+    return;
+  }
+
+  const domain = process.env["REPLIT_DOMAINS"]?.split(",")[0] ?? "nyumbacheck.co.ke";
+  const marketUrl = `https://${domain}/market`;
+  const hood = data.neighbourhood.charAt(0).toUpperCase() + data.neighbourhood.slice(1);
+
+  const listingsHtml = data.listings
+    .map(
+      (l) => `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+        <a href="${l.url}" style="color:#1a3a2a;font-weight:600;font-size:14px;text-decoration:none;">${l.title}</a><br>
+        <span style="color:#64748b;font-size:12px;">${l.neighbourhood} · ${formatKsh(l.priceKsh)}</span>
+      </td>
+      <td style="padding:10px 0 10px 16px;border-bottom:1px solid #f1f5f9;text-align:right;vertical-align:top;">
+        <a href="${l.url}" style="color:#1a3a2a;font-size:12px;font-weight:600;">View →</a>
+      </td>
+    </tr>`,
+    )
+    .join("");
+
+  const criteriaHtml = [
+    data.listingType === "rent" ? "For Rent" : "For Sale",
+    data.maxPriceKsh ? `Max ${formatKsh(data.maxPriceKsh)}` : null,
+    data.minBedrooms ? `${data.minBedrooms}+ bedrooms` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const subject = `🏠 ${data.matchCount} new listing${data.matchCount > 1 ? "s" : ""} in ${hood} match your alert`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:600px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <div style="background:#1a3a2a;padding:28px 32px;text-align:center;">
+      <span style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">NyumbaCheck</span>
+      <p style="color:#86efac;margin:4px 0 0;font-size:13px;">Price Alert · ${hood}</p>
+    </div>
+    <div style="padding:28px 32px;">
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1e293b;">
+        ${data.matchCount} new listing${data.matchCount > 1 ? "s" : ""} matched your alert
+      </h2>
+      <p style="margin:0 0 20px;font-size:14px;color:#64748b;">
+        Criteria: ${criteriaHtml}
+      </p>
+      <table style="width:100%;border-collapse:collapse;">
+        ${listingsHtml}
+      </table>
+      <div style="height:20px;"></div>
+      <a href="${marketUrl}" style="display:block;text-align:center;background:#1a3a2a;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:8px;font-size:15px;font-weight:600;margin-bottom:24px;">
+        View Market Intelligence →
+      </a>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">
+        NyumbaCheck · Property fraud detection for Nairobi renters &amp; buyers<br>
+        You're receiving this because you set a price alert. Alerts trigger at most once per 24 hours.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  try {
+    const { Resend } = await import("resend");
+    const resend = new Resend(apiKey);
+    const result = await resend.emails.send({
+      from: "NyumbaCheck <reports@nyumbacheck.co.ke>",
+      to: data.to,
+      subject,
+      html,
+    });
+    logger.info({ to: data.to, neighbourhood: data.neighbourhood, id: result.data?.id }, "alert_email.sent");
+  } catch (err) {
+    logger.error({ err, to: data.to }, "alert_email.send_error");
+  }
+}
+
 export async function sendReportEmail(data: ReportEmailData): Promise<void> {
   const apiKey = process.env["RESEND_API_KEY"];
 

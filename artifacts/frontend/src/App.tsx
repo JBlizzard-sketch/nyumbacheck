@@ -15,6 +15,7 @@ import MarketPage from "@/pages/market";
 import ScammerPage from "@/pages/scammer";
 import MyReportsPage from "@/pages/my-reports";
 import AdminPage from "@/pages/admin";
+import VerifyPage from "@/pages/verify";
 import NotFoundPage from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -159,6 +160,7 @@ function ClerkProviderWithRoutes() {
           <Route path="/scammer" component={ScammerPage} />
           <Route path="/my-reports" component={ProtectedMyReports} />
           <Route path="/admin" component={AdminPage} />
+          <Route path="/verify" component={VerifyPage} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route component={NotFoundPage} />
