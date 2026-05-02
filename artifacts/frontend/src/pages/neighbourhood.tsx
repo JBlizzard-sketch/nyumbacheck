@@ -13,9 +13,10 @@ import {
 } from "recharts";
 import {
   TrendingUp, MapPin, Home, Building2, AlertTriangle, Clock,
-  ArrowLeft, Loader2, BarChart3, Copy, MessageCircle,
-  Bell, BellRing, X, CheckCircle, ShieldCheck
+  ArrowLeft, ArrowRight, Loader2, BarChart3, Copy, MessageCircle,
+  Bell, BellRing, X, CheckCircle, ShieldCheck, Shield
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -62,6 +63,105 @@ const LABEL: Record<string, string> = {
   muthaiga: "Muthaiga", lavington: "Lavington", kasarani: "Kasarani",
   ruaka: "Ruaka", gigiri: "Gigiri",
 };
+
+// ── Recent Fraud Feed ─────────────────────────────────────────────────────────
+type FeedEntry = {
+  id: number;
+  riskLevel: string | null;
+  score: number | null;
+  signalCount: number;
+  createdAt: string;
+};
+
+const RISK_META: Record<string, { dot: string; label: string; text: string; bg: string; border: string }> = {
+  critical: { dot: "bg-red-500",    label: "Critical", text: "text-red-700",    bg: "bg-red-50",    border: "border-red-100" },
+  high:     { dot: "bg-orange-500", label: "High",     text: "text-orange-700", bg: "bg-orange-50", border: "border-orange-100" },
+  medium:   { dot: "bg-amber-400",  label: "Medium",   text: "text-amber-700",  bg: "bg-amber-50",  border: "border-amber-100" },
+  low:      { dot: "bg-green-500",  label: "Low",      text: "text-green-700",  bg: "bg-green-50",  border: "border-green-100" },
+};
+
+function timeAgo(iso: string) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function RecentFraudFeedSection({ slug, displayName }: { slug: string; displayName: string }) {
+  const { data, isLoading } = useQuery<{ reports: FeedEntry[] }>({
+    queryKey: ["neighbourhood-feed", slug],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/reports/recent-public?limit=5&neighbourhood=${encodeURIComponent(slug)}`);
+      if (!r.ok) throw new Error("failed");
+      return r.json() as Promise<{ reports: FeedEntry[] }>;
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const reports = data?.reports ?? [];
+
+  if (!isLoading && reports.length === 0) return null;
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            </span>
+            Recent Fraud Checks in {displayName}
+          </CardTitle>
+          <Link href="/fraud-feed">
+            <button className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
+              See all <ArrowRight className="h-3 w-3" />
+            </button>
+          </Link>
+        </div>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Latest anonymised fraud reports checked in this area.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-11 rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {reports.map((entry) => {
+              const meta = RISK_META[entry.riskLevel ?? "low"] ?? RISK_META.low;
+              return (
+                <Link key={entry.id} href={`/reports/${entry.id}`}>
+                  <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer hover:brightness-95 transition-all ${meta.border} ${meta.bg}`}>
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+                    <span className={`text-xs font-semibold flex-shrink-0 w-14 ${meta.text}`}>
+                      {meta.label} Risk
+                    </span>
+                    <span className="text-xs text-slate-700 font-mono flex-shrink-0 w-14">
+                      {entry.score != null ? `${Math.round(entry.score)}/100` : "—"}
+                    </span>
+                    <span className="text-xs text-slate-500 flex-shrink-0">
+                      {entry.signalCount} signal{entry.signalCount !== 1 ? "s" : ""}
+                    </span>
+                    <span className="text-xs text-slate-400 ml-auto flex-shrink-0 flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> {timeAgo(entry.createdAt)}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // ── Price Alert Card ──────────────────────────────────────────────────────────
 type AlertRow = {
@@ -611,6 +711,9 @@ export default function NeighbourhoodPage() {
             )}
           </>
         )}
+
+        {/* Recent fraud checks for this neighbourhood */}
+        <RecentFraudFeedSection slug={slug ?? ""} displayName={displayName} />
 
         {/* Price Alert Card */}
         <NeighbourhoodAlertCard

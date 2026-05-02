@@ -1,5 +1,12 @@
 # NyumbaCheck — Real Estate Fraud Detection Platform
 
+## Phase 39 Complete
+- **Neighbourhood page "Recent Fraud Checks" live feed**: Each neighbourhood detail page (`/neighbourhood/:slug`) now shows a "Recent Fraud Checks in [Area]" card between the Active Listings chart and the Price Alert section. Fetches from `/api/reports/recent-public?limit=5&neighbourhood={slug}` — shows up to 5 anonymised reports with animated pulsing-dot header, risk level badge (Critical/High/Medium/Low with colour-coded backgrounds), fraud score/100, signal count, and relative timestamp. Each row is clickable → full report. "See all →" links to the fraud feed. Card hides automatically if no checks exist for that neighbourhood yet.
+
+## Phase 38 Complete
+- **Enhanced WhatsApp warning for high/critical reports**: For `riskLevel === "high"` or `"critical"`, the WhatsApp share message is now a detailed multi-line fraud alert: ⚠️ FRAUD ALERT header, property snippet, risk score + emoji, top 3 fraud signal bullets (sorted by contribution), "AVOID THIS LISTING. Do not pay any deposit.", full report URL, and NyumbaCheck tagline. For low/medium risk the message stays as a concise one-liner.
+- **Market page "Download CSV" from Safety Rankings**: Added `downloadRankingsCsv()` function that generates a properly-formatted CSV with columns: Rank, Neighbourhood, Safety Grade, Fraud Score (/100), Median Price (KSh), Active Listings. A "Download CSV" button appears in the top-right of the Fraud Safety Rankings card when data is loaded. File is named `nairobi-safety-rankings-{rent|sale}-{date}.csv`.
+
 ## Phase 37 Complete
 - **Admin "Price Alerts" tab**: 4th tab added to the admin dashboard. Endpoint `GET /api/admin/alerts` returns all active price alerts with demand aggregations (by neighbourhood, by listing type). Frontend tab shows: 4 stat cards (total alerts, top area, rental count, sale count), a "Demand by Neighbourhood" bar chart showing relative watch-pressure per area, and a full sortable alerts table with email (partially anonymised), neighbourhood, listing type, max price, min bedrooms, and created date.
 

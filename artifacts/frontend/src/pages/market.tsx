@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff, Scale, AlertTriangle, ShieldAlert, ArrowRight, ShieldCheck, Shield } from "lucide-react";
+import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff, Scale, AlertTriangle, ShieldAlert, ArrowRight, ShieldCheck, Shield, Download } from "lucide-react";
 import { Link } from "wouter";
 import {
   LineChart,
@@ -324,6 +324,32 @@ function safetyGrade(score: number | null): { grade: string; color: string; bg: 
   return { grade: "F", color: "text-red-700", bg: "bg-red-100", bar: "#ef4444" };
 }
 
+function downloadRankingsCsv(rows: CompareRow[], listingType: string) {
+  const priceHeader = listingType === "rent" ? "Median Rent (KSh/month)" : "Median Sale Price (KSh)";
+  const headers = ["Rank", "Neighbourhood", "Safety Grade", "Fraud Score (/100)", priceHeader, "Active Listings"];
+  const csvRows = rows.map((row, idx) => {
+    const g = safetyGrade(row.avgFraudScore);
+    return [
+      idx + 1,
+      `"${row.name}"`,
+      g.grade,
+      row.avgFraudScore != null ? Math.round(row.avgFraudScore) : "",
+      row.medianPriceKsh ?? "",
+      row.activeListings,
+    ].join(",");
+  });
+  const csv = [headers.join(","), ...csvRows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `nairobi-safety-rankings-${listingType}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function NeighbourhoodSafetyRankings({ listingType }: { listingType: "rent" | "sale" }) {
   const { data, isLoading } = useQuery<{ neighbourhoods: CompareRow[] }>({
     queryKey: ["market-compare", listingType],
@@ -346,13 +372,27 @@ function NeighbourhoodSafetyRankings({ listingType }: { listingType: "rent" | "s
   return (
     <Card className="mb-8">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Shield className="h-5 w-5 text-primary" />
-          Fraud Safety Rankings
-        </CardTitle>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Nairobi neighbourhoods ranked safest → riskiest based on fraud scores across all analysed listings.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Shield className="h-5 w-5 text-primary" />
+              Fraud Safety Rankings
+            </CardTitle>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Nairobi neighbourhoods ranked safest → riskiest based on fraud scores across all analysed listings.
+            </p>
+          </div>
+          {rows.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 flex-shrink-0 h-8 text-xs"
+              onClick={() => downloadRankingsCsv(rows, listingType)}
+            >
+              <Download className="h-3.5 w-3.5" /> Download CSV
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (

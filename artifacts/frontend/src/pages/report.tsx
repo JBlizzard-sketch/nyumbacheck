@@ -561,8 +561,29 @@ export default function ReportPage() {
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const riskEmoji = { low: "🟢", medium: "🟡", high: "🟠", critical: "🔴" }[reportData.fraudScore?.riskLevel ?? ""] ?? "🔍";
+  const isHighRisk = reportData.fraudScore?.riskLevel === "high" || reportData.fraudScore?.riskLevel === "critical";
+  const fraudSignals = (reportData.fraudScore?.signals as Signal[] | undefined) ?? [];
+  const topSignals = [...fraudSignals]
+    .sort((a, b) => (b.contribution ?? b.score ?? 0) - (a.contribution ?? a.score ?? 0))
+    .slice(0, 3);
   const waText = reportData.fraudScore
-    ? `NyumbaCheck fraud report for ${input.slice(0, 60)}: ${Math.round(reportData.fraudScore.score)}/100 risk score (${reportData.fraudScore.riskLevel.toUpperCase()}). ${riskEmoji} Check it: ${shareUrl}`
+    ? isHighRisk
+      ? [
+          `⚠️ FRAUD ALERT — NyumbaCheck`,
+          ``,
+          `Property: ${input.slice(0, 80)}`,
+          `Risk Score: ${Math.round(reportData.fraudScore.score)}/100 ${riskEmoji} ${reportData.fraudScore.riskLevel.toUpperCase()} RISK`,
+          ``,
+          topSignals.length > 0 ? `Fraud signals detected:` : null,
+          ...topSignals.map((s) => `• ${s.label}`),
+          ``,
+          `AVOID THIS LISTING. Do not pay any deposit.`,
+          ``,
+          `Full report: ${shareUrl}`,
+          ``,
+          `Check any Nairobi listing at NyumbaCheck`,
+        ].filter(Boolean).join("\n")
+      : `NyumbaCheck fraud report for ${input.slice(0, 60)}: ${Math.round(reportData.fraudScore.score)}/100 (${reportData.fraudScore.riskLevel.toUpperCase()}). ${riskEmoji} Check it: ${shareUrl}`
     : `NyumbaCheck analysis in progress for ${input.slice(0, 60)}. Check it: ${shareUrl}`;
 
   function handleCopy() {
