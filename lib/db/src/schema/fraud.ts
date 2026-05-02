@@ -41,7 +41,7 @@ export const reportRequestsTable = pgTable("report_requests", {
   inputType: text("input_type").$type<"url" | "address">().notNull(),
   email: text("email").notNull(),
   userId: text("user_id"),
-  status: text("status").$type<"pending" | "processing" | "complete" | "failed">().notNull().default("pending"),
+  status: text("status").$type<"awaiting_payment" | "pending" | "processing" | "complete" | "failed">().notNull().default("pending"),
   failureReason: text("failure_reason"),
   fraudScoreId: integer("fraud_score_id").references(() => fraudScoresTable.id),
   clusterId: integer("cluster_id").references(() => dedupClustersTable.id),
@@ -49,6 +49,7 @@ export const reportRequestsTable = pgTable("report_requests", {
   isPaid: integer("is_paid").notNull().default(0),
   paymentRef: text("payment_ref"),
   pricePaid: real("price_paid"),
+  stripeSessionId: text("stripe_session_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({

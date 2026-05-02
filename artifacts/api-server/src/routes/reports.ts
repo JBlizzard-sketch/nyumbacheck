@@ -34,6 +34,78 @@ router.post("/reports", async (req: Request, res: Response) => {
   const { inputUrl, inputAddress, email } = parsed.data;
 
   try {
+    // Try to create a Stripe checkout session. If Stripe is unavailable (dev/no keys),
+    // fall back to free mode so the demo works without payment credentials.
+    let stripeCheckoutUrl: string | null = null;
+    let initialStatus: "awaiting_payment" | "pending" = "pending";
+
+    try {
+      const { getUncachableStripeClient } = await import("../lib/stripeClient");
+      const stripe = await getUncachableStripeClient();
+
+      // Temporarily insert with placeholder id to get an ID for the session metadata
+      const [tempReport] = await db
+        .insert(reportRequestsTable)
+        .values({
+          inputUrl: inputUrl ?? null,
+          inputAddress: inputAddress ?? null,
+          inputType: inputUrl ? "url" : "address",
+          email,
+          status: "awaiting_payment",
+        })
+        .returning();
+
+      const domain = process.env["REPLIT_DOMAINS"]?.split(",")[0];
+      const baseUrl = domain ? `https://${domain}` : `http://localhost:${process.env["PORT"] ?? 8080}`;
+
+      // Use inline price_data (fallback) — seed-products.ts creates a proper product
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: 400, // $4.00 ≈ KSh 500
+              product_data: {
+                name: "NyumbaCheck Fraud Report",
+                description: `Comprehensive fraud risk analysis for property listing #${tempReport.id}`,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        customer_email: email,
+        success_url: `${baseUrl}/reports/${tempReport.id}?payment=success`,
+        cancel_url: `${baseUrl}/reports/${tempReport.id}?payment=cancelled`,
+        metadata: { reportId: String(tempReport.id), email },
+      });
+
+      // Persist the session ID so the webhook can look up this report
+      await db.execute(
+        (await import("drizzle-orm")).sql`UPDATE report_requests SET stripe_session_id = ${session.id}, updated_at = NOW() WHERE id = ${tempReport.id}`
+      );
+
+      logger.info({ reportId: tempReport.id, sessionId: session.id }, "report.stripe_checkout_created");
+
+      res.status(201).json({
+        id: tempReport.id,
+        status: tempReport.status,
+        email: tempReport.email,
+        inputUrl: tempReport.inputUrl,
+        inputAddress: tempReport.inputAddress,
+        createdAt: tempReport.createdAt,
+        estimatedCompletionMinutes: 5,
+        checkoutUrl: session.url,
+      });
+      return;
+    } catch (stripeErr) {
+      // Stripe unavailable — run in free/demo mode
+      logger.warn({ stripeErr }, "report.stripe_unavailable_fallback_to_free");
+      initialStatus = "pending";
+    }
+
+    // Free mode: insert directly as pending
     const [report] = await db
       .insert(reportRequestsTable)
       .values({
@@ -41,17 +113,11 @@ router.post("/reports", async (req: Request, res: Response) => {
         inputAddress: inputAddress ?? null,
         inputType: inputUrl ? "url" : "address",
         email,
-        status: "pending",
+        status: initialStatus,
       })
       .returning();
 
-    logger.info({ reportId: report.id, email }, "report.submitted");
-
-    // Fire-and-forget: trigger the Python pipeline via internal HTTP
-    // In production this would be a Celery task enqueue via Redis
-    triggerReportProcessing(report.id).catch((err) =>
-      logger.error({ reportId: report.id, err }, "report.trigger_failed")
-    );
+    logger.info({ reportId: report.id, email, stripeCheckoutUrl }, "report.submitted");
 
     res.status(201).json({
       id: report.id,
@@ -61,6 +127,7 @@ router.post("/reports", async (req: Request, res: Response) => {
       inputAddress: report.inputAddress,
       createdAt: report.createdAt,
       estimatedCompletionMinutes: 5,
+      checkoutUrl: null,
     });
   } catch (err) {
     logger.error({ err }, "report.submit_error");

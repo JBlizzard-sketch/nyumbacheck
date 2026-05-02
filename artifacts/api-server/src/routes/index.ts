@@ -6,6 +6,7 @@ import agentsRouter from "./agents";
 import marketRouter from "./market";
 import scammerRouter from "./scammer";
 import paymentsRouter from "./payments";
+import stripeRouter from "./stripe";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(agentsRouter);
 router.use(marketRouter);
 router.use(scammerRouter);
 router.use("/payments", paymentsRouter);
+router.use("/payments", stripeRouter);
 
 export default router;
