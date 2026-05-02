@@ -18,6 +18,7 @@ import {
 import { sql, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+import { processReport } from "../lib/report-simulator";
 
 const router: IRouter = Router();
 
@@ -120,6 +121,57 @@ router.get("/admin/scammers", async (_req: Request, res: Response) => {
     res.json({ scammers: rows });
   } catch (err) {
     logger.error({ err }, "admin.scammers_error");
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// ── POST /admin/reports/:id/simulate ─────────────────────────────────────────
+
+router.post("/admin/reports/:id/simulate", async (req: Request, res: Response) => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "bad_request" });
+    return;
+  }
+
+  try {
+    const [report] = await db
+      .select({ id: reportRequestsTable.id, status: reportRequestsTable.status })
+      .from(reportRequestsTable)
+      .where(eq(reportRequestsTable.id, id))
+      .limit(1);
+
+    if (!report) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+
+    if (report.status === "complete") {
+      res.status(400).json({ error: "already_complete" });
+      return;
+    }
+
+    // Advance to processing if not already there
+    if (report.status !== "processing") {
+      await db
+        .update(reportRequestsTable)
+        .set({ status: "processing", updatedAt: new Date() })
+        .where(eq(reportRequestsTable.id, id));
+    }
+
+    // Run the simulator synchronously so this request resolves when done
+    await processReport(id);
+
+    const [updated] = await db
+      .select({ status: reportRequestsTable.status })
+      .from(reportRequestsTable)
+      .where(eq(reportRequestsTable.id, id))
+      .limit(1);
+
+    logger.info({ reportId: id, newStatus: updated?.status }, "admin.simulate_report");
+    res.json({ ok: true, status: updated?.status ?? "complete" });
+  } catch (err) {
+    logger.error({ err, id }, "admin.simulate_report_error");
     res.status(500).json({ error: "internal_error" });
   }
 });

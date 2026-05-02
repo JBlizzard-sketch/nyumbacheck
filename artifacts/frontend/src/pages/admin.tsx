@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ShieldCheck, FileText, Users, Database, TrendingUp, AlertTriangle,
-  CheckCircle, Clock, XCircle, Loader2, RefreshCw
+  CheckCircle, Clock, XCircle, Loader2, RefreshCw, Play, ExternalLink
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -95,6 +95,26 @@ export default function AdminPage() {
       }).then((r) => r.json()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-scammers"] }),
   });
+
+  const [simulatingId, setSimulatingId] = useState<number | null>(null);
+
+  async function handleSimulate(reportId: number) {
+    setSimulatingId(reportId);
+    try {
+      const r = await fetch(`${BASE}/api/admin/reports/${reportId}/simulate`, { method: "POST" });
+      const j = await r.json() as { ok?: boolean; error?: string; status?: string };
+      if (j.ok) {
+        await qc.invalidateQueries({ queryKey: ["admin-reports"] });
+        await qc.invalidateQueries({ queryKey: ["admin-stats"] });
+      } else {
+        console.error("simulate error", j.error);
+      }
+    } catch (e) {
+      console.error("simulate fetch error", e);
+    } finally {
+      setSimulatingId(null);
+    }
+  }
 
   if (!isLoaded) {
     return (
@@ -259,6 +279,7 @@ export default function AdminPage() {
                         <th className="text-left px-4 py-3 text-slate-500 font-medium">Score</th>
                         <th className="text-left px-4 py-3 text-slate-500 font-medium">Input</th>
                         <th className="text-left px-4 py-3 text-slate-500 font-medium">Created</th>
+                        <th className="text-left px-4 py-3 text-slate-500 font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -284,10 +305,32 @@ export default function AdminPage() {
                           <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                             {new Date(r.createdAt).toLocaleString("en-KE", { dateStyle: "short", timeStyle: "short" })}
                           </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <a href={`${BASE}/report/${r.id}`} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-primary">
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                              </a>
+                              {r.status !== "complete" && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs gap-1 bg-primary hover:bg-primary/90 text-white"
+                                  disabled={simulatingId === r.id}
+                                  onClick={() => handleSimulate(r.id)}
+                                >
+                                  {simulatingId === r.id
+                                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                                    : <Play className="h-3 w-3" />}
+                                  {simulatingId === r.id ? "Running…" : "Simulate"}
+                                </Button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                       {(reportsData?.reports ?? []).length === 0 && (
-                        <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No reports yet.</td></tr>
+                        <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No reports yet.</td></tr>
                       )}
                     </tbody>
                   </table>

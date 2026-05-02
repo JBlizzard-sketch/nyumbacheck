@@ -232,7 +232,7 @@ const PLATFORM_DATA = [
 
 // ── Main processing function ──────────────────────────────────────────────────
 
-async function processReport(reportId: number): Promise<void> {
+export async function processReport(reportId: number): Promise<void> {
   const [report] = await db
     .select()
     .from(reportRequestsTable)
