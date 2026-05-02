@@ -6,10 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Copy, MessageCircle, Download, ShieldCheck, ShieldAlert, Phone, TrendingDown, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Copy, MessageCircle, Download, ShieldCheck, ShieldAlert, Phone, TrendingDown, HelpCircle, ChevronDown, ChevronUp, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { generateReportPdf } from "@/lib/report-pdf";
 import { usePageMeta } from "@/lib/use-page-meta";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const riskColors: Record<string, string> = {
   low: "bg-green-100 text-green-800 border-green-200",
@@ -187,6 +189,155 @@ function WhatToDoNext({ riskLevel }: { riskLevel: string }) {
             </Button>
           </Link>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Report Agent Card ────────────────────────────────────────────────────────
+const API_BASE_REPORT = import.meta.env.BASE_URL?.replace(/\/$/, "") + "/api";
+
+type ReportAgentState = "idle" | "submitting" | "success" | "error";
+
+function ReportAgentCard({
+  phones,
+  riskLevel,
+}: {
+  phones: string[];
+  riskLevel: string;
+}) {
+  const [selectedPhone, setSelectedPhone] = useState(phones[0] ?? "");
+  const [notes, setNotes] = useState("");
+  const [state, setState] = useState<ReportAgentState>("idle");
+
+  if (riskLevel !== "high" && riskLevel !== "critical") return null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const phone = selectedPhone.trim();
+    if (!phone) return;
+    setState("submitting");
+    try {
+      const r = await fetch(`${API_BASE_REPORT}/scammer-registry/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, notes: notes.trim() || undefined }),
+      });
+      if (!r.ok) throw new Error("failed");
+      setState("success");
+    } catch {
+      setState("error");
+    }
+  }
+
+  const borderColor = riskLevel === "critical" ? "border-red-300 bg-red-50" : "border-orange-200 bg-orange-50";
+  const iconColor  = riskLevel === "critical" ? "text-red-600"    : "text-orange-600";
+  const titleColor = riskLevel === "critical" ? "text-red-900"    : "text-orange-900";
+  const subColor   = riskLevel === "critical" ? "text-red-700"    : "text-orange-700";
+  const chipBase   = "text-xs font-mono px-2.5 py-1 rounded-full border transition-colors cursor-pointer";
+  const chipActive = riskLevel === "critical"
+    ? "bg-red-200 border-red-400 text-red-900"
+    : "bg-orange-200 border-orange-400 text-orange-900";
+  const chipInactive = "bg-white border-slate-200 text-slate-600 hover:border-slate-300";
+
+  return (
+    <Card className={`border ${borderColor}`}>
+      <CardHeader className="pb-3">
+        <CardTitle className={`flex items-center gap-2 text-base ${titleColor}`}>
+          <Flag className={`h-4 w-4 ${iconColor}`} />
+          Protect others — report this agent
+        </CardTitle>
+        <p className={`text-sm mt-0.5 ${subColor}`}>
+          Submitting this number adds it to the NyumbaCheck Scammer Registry so future renters are warned automatically.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {state === "success" ? (
+          <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-green-800 text-sm">Report received — thank you!</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                The number <span className="font-mono font-semibold">{selectedPhone}</span> has been
+                added to the review queue. Our team will confirm it within 24 hours.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {phones.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                  Agent phones detected in this listing
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {phones.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setSelectedPhone(p)}
+                      className={`${chipBase} ${selectedPhone === p ? chipActive : chipInactive}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Phone number to report <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input
+                  className="pl-9 h-10 text-sm"
+                  placeholder="+254 7XX XXX XXX"
+                  value={selectedPhone}
+                  onChange={(e) => setSelectedPhone(e.target.value)}
+                  required
+                  minLength={7}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Notes <span className="text-slate-400 font-normal">(optional — helps our review team)</span>
+              </label>
+              <Textarea
+                className="resize-none text-sm"
+                rows={2}
+                maxLength={500}
+                placeholder='e.g. "Same photos posted on 3 platforms, asked for KSh 40K deposit before viewing"'
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              <p className="text-xs text-slate-400 mt-1">{notes.length}/500</p>
+            </div>
+
+            {state === "error" && (
+              <p className="text-sm text-red-600 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                Submission failed — please try again.
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              disabled={state === "submitting" || !selectedPhone.trim()}
+              className={`gap-2 ${riskLevel === "critical" ? "bg-red-700 hover:bg-red-800" : "bg-orange-600 hover:bg-orange-700"} text-white border-0`}
+            >
+              {state === "submitting"
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</>
+                : <><Flag className="h-4 w-4" /> Submit Report</>}
+            </Button>
+            <p className="text-xs text-slate-500">
+              Reports are reviewed before the number is publicly confirmed as fraud. Your identity is not shared.
+            </p>
+          </form>
+        )}
       </CardContent>
     </Card>
   );
@@ -759,6 +910,23 @@ export default function ReportPage() {
         {reportData.fraudScore && (
           <WhatToDoNext riskLevel={reportData.fraudScore.riskLevel} />
         )}
+
+        {/* Report agent inline card — only for high/critical */}
+        {reportData.fraudScore && (reportData.fraudScore.riskLevel === "high" || reportData.fraudScore.riskLevel === "critical") && (() => {
+          const phones = [
+            ...new Set(
+              (reportData.duplicateListings ?? [])
+                .map((d) => d.agentPhone)
+                .filter((p): p is string => !!p)
+            ),
+          ];
+          return (
+            <ReportAgentCard
+              phones={phones}
+              riskLevel={reportData.fraudScore!.riskLevel}
+            />
+          );
+        })()}
 
         {/* Complete with no fraud score */}
         {reportData.status === "complete" && !reportData.fraudScore && (

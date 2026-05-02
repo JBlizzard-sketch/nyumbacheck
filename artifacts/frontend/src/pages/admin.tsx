@@ -307,7 +307,7 @@ export default function AdminPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
-                              <a href={`${BASE}/report/${r.id}`} target="_blank" rel="noopener noreferrer">
+                              <a href={`${BASE}/reports/${r.id}`} target="_blank" rel="noopener noreferrer">
                                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-primary">
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </Button>
