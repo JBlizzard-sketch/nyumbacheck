@@ -7,10 +7,267 @@
  */
 import * as zod from "zod";
 
-/**
- * Returns server health status
- * @summary Health check
- */
+// ── Health ──────────────────────────────────────────────────────────────────
+
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+});
+
+// ── Shared ───────────────────────────────────────────────────────────────────
+
+export const ApiError = zod.object({
+  error: zod.string(),
+  message: zod.string(),
+  details: zod.record(zod.unknown()).optional(),
+});
+
+export const FraudSignal = zod.object({
+  type: zod.string(),
+  label: zod.string(),
+  description: zod.string(),
+  weight: zod.number(),
+  score: zod.number(),
+  rawValue: zod.union([zod.string(), zod.number()]).nullable().optional(),
+});
+
+export const FraudScoreSummary = zod.object({
+  score: zod.number(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]),
+  summary: zod.string(),
+  signals: zod.array(FraudSignal),
+  platformCountScore: zod.number().nullable().optional(),
+  priceSpreadScore: zod.number().nullable().optional(),
+  agentPhoneOverlapScore: zod.number().nullable().optional(),
+  daysOnMarketScore: zod.number().nullable().optional(),
+  imageReuseScore: zod.number().nullable().optional(),
+  priceAnomalyScore: zod.number().nullable().optional(),
+});
+
+export const DuplicateListing = zod.object({
+  platform: zod.string(),
+  url: zod.string(),
+  priceKsh: zod.number().nullable().optional(),
+  agentPhone: zod.string().nullable().optional(),
+});
+
+// ── Reports ───────────────────────────────────────────────────────────────────
+
+export const SubmitReportRequest = zod.object({
+  inputUrl: zod.string().url().optional(),
+  inputAddress: zod.string().optional(),
+  email: zod.string().email(),
+});
+
+export const ReportRequestSummary = zod.object({
+  id: zod.number().int(),
+  status: zod.enum(["pending", "processing", "complete", "failed"]),
+  email: zod.string(),
+  inputUrl: zod.string().nullable().optional(),
+  inputAddress: zod.string().nullable().optional(),
+  createdAt: zod.string(),
+  estimatedCompletionMinutes: zod.number().int(),
+});
+
+export const ReportResponse = zod.object({
+  id: zod.number().int(),
+  status: zod.enum(["pending", "processing", "complete", "failed"]),
+  email: zod.string(),
+  inputUrl: zod.string().nullable().optional(),
+  inputAddress: zod.string().nullable().optional(),
+  createdAt: zod.string(),
+  completedAt: zod.string().nullable().optional(),
+  reportUrl: zod.string().nullable().optional(),
+  fraudScore: FraudScoreSummary.nullable().optional(),
+  duplicateListings: zod.array(DuplicateListing),
+  platformCount: zod.number().int().nullable().optional(),
+  priceRangeKsh: zod.object({
+    min: zod.number(),
+    max: zod.number(),
+  }).nullable().optional(),
+  failureReason: zod.string().nullable().optional(),
+});
+
+// ── Listings ──────────────────────────────────────────────────────────────────
+
+export const ListingSummary = zod.object({
+  id: zod.number().int(),
+  platform: zod.string(),
+  url: zod.string(),
+  title: zod.string().nullable().optional(),
+  listingType: zod.enum(["rent", "sale"]).optional(),
+  priceKsh: zod.number().nullable().optional(),
+  bedrooms: zod.number().int().nullable().optional(),
+  bathrooms: zod.number().int().nullable().optional(),
+  sqft: zod.number().nullable().optional(),
+  neighbourhood: zod.string().nullable().optional(),
+  fraudScore: zod.number().nullable().optional(),
+  riskLevel: zod.enum(["low", "medium", "high", "critical"]).nullable().optional(),
+  isActive: zod.boolean(),
+  firstSeenAt: zod.string(),
+});
+
+export const ListingDetail = ListingSummary.and(zod.object({
+  rawAddress: zod.string().nullable().optional(),
+  imageUrls: zod.array(zod.string()).optional(),
+  agentName: zod.string().nullable().optional(),
+  agentPhone: zod.string().nullable().optional(),
+  daysOnMarket: zod.number().int().nullable().optional(),
+  fraudScoreDetail: FraudScoreSummary.nullable().optional(),
+  duplicates: zod.array(DuplicateListing).optional(),
+}));
+
+export const ListingsPage = zod.object({
+  listings: zod.array(ListingSummary),
+  total: zod.number().int(),
+  page: zod.number().int(),
+  pageSize: zod.number().int(),
+  totalPages: zod.number().int(),
+});
+
+// ── Agents ────────────────────────────────────────────────────────────────────
+
+export const AgentSummary = zod.object({
+  id: zod.number().int(),
+  name: zod.string().nullable().optional(),
+  company: zod.string().nullable().optional(),
+  reputationScore: zod.number().nullable().optional(),
+  totalListings: zod.number().int(),
+  ghostListingRate: zod.number().nullable().optional(),
+  isVerified: zod.boolean(),
+  isBlacklisted: zod.boolean(),
+});
+
+export const AgentDetail = AgentSummary.and(zod.object({
+  phoneNumbers: zod.array(zod.string()).optional(),
+  priceConsistencyScore: zod.number().nullable().optional(),
+  duplicateListingRate: zod.number().nullable().optional(),
+  blacklistReason: zod.string().nullable().optional(),
+  recentListings: zod.array(ListingSummary).optional(),
+}));
+
+export const AgentsPage = zod.object({
+  agents: zod.array(AgentSummary),
+  total: zod.number().int(),
+  page: zod.number().int(),
+  pageSize: zod.number().int(),
+  totalPages: zod.number().int(),
+});
+
+// ── Market ────────────────────────────────────────────────────────────────────
+
+export const Neighbourhood = zod.object({
+  id: zod.number().int(),
+  slug: zod.string(),
+  name: zod.string(),
+  city: zod.string(),
+  aliases: zod.array(zod.string()).nullable().optional(),
+  latitude: zod.number().nullable().optional(),
+  longitude: zod.number().nullable().optional(),
+  isTracked: zod.number().int(),
+});
+
+export const MarketStats = zod.object({
+  neighbourhood: zod.string(),
+  listingType: zod.enum(["rent", "sale"]),
+  period: zod.string(),
+  activeListings: zod.number().int(),
+  uniqueProperties: zod.number().int(),
+  duplicateRate: zod.number().nullable().optional(),
+  medianPriceKsh: zod.number().nullable().optional(),
+  medianPricePerSqftKsh: zod.number().nullable().optional(),
+  p25PriceKsh: zod.number().nullable().optional(),
+  p75PriceKsh: zod.number().nullable().optional(),
+  medianDaysOnMarket: zod.number().nullable().optional(),
+  listingVelocityIndex: zod.number().nullable().optional(),
+  highFraudListings: zod.number().int(),
+  avgFraudScore: zod.number().nullable().optional(),
+});
+
+export const MarketTrendDataPoint = zod.object({
+  date: zod.string(),
+  medianPriceKsh: zod.number().nullable().optional(),
+  activeListings: zod.number().int(),
+  newListings: zod.number().int(),
+  medianDaysOnMarket: zod.number().nullable().optional(),
+});
+
+export const MarketTrends = zod.object({
+  neighbourhood: zod.string(),
+  listingType: zod.enum(["rent", "sale"]),
+  dataPoints: zod.array(MarketTrendDataPoint),
+});
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+
+export const PriceAlert = zod.object({
+  id: zod.number().int(),
+  userId: zod.string(),
+  email: zod.string(),
+  alertType: zod.enum(["listing_watch", "search_alert"]),
+  neighbourhood: zod.string().nullable().optional(),
+  listingType: zod.enum(["rent", "sale"]).nullable().optional(),
+  minBedrooms: zod.number().int().nullable().optional(),
+  maxBedrooms: zod.number().int().nullable().optional(),
+  minPriceKsh: zod.number().nullable().optional(),
+  maxPriceKsh: zod.number().nullable().optional(),
+  isActive: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+export const CreateAlertRequest = zod.object({
+  alertType: zod.enum(["listing_watch", "search_alert"]),
+  listingId: zod.number().int().optional(),
+  neighbourhood: zod.string().optional(),
+  listingType: zod.enum(["rent", "sale"]).optional(),
+  minBedrooms: zod.number().int().optional(),
+  maxBedrooms: zod.number().int().optional(),
+  minPriceKsh: zod.number().optional(),
+  maxPriceKsh: zod.number().optional(),
+});
+
+// ── Scammer Registry ──────────────────────────────────────────────────────────
+
+export const ScammerLookupResult = zod.object({
+  phone: zod.string(),
+  normalisedPhone: zod.string(),
+  isRegistered: zod.boolean(),
+  reportCount: zod.number().int().nullable().optional(),
+  linkedListingCount: zod.number().int().nullable().optional(),
+  isConfirmed: zod.boolean().nullable().optional(),
+  notes: zod.string().nullable().optional(),
+});
+
+// ── Parameter schemas for query validation ────────────────────────────────────
+
+export const listListingsParams = zod.object({
+  neighbourhood: zod.string().optional(),
+  listingType: zod.enum(["rent", "sale"]).optional(),
+  minBedrooms: zod.coerce.number().int().optional(),
+  maxBedrooms: zod.coerce.number().int().optional(),
+  minPriceKsh: zod.coerce.number().optional(),
+  maxPriceKsh: zod.coerce.number().optional(),
+  platform: zod.string().optional(),
+  minFraudScore: zod.coerce.number().optional(),
+  page: zod.coerce.number().int().default(1),
+  pageSize: zod.coerce.number().int().max(100).default(20),
+});
+
+export const listAgentsParams = zod.object({
+  q: zod.string().optional(),
+  minReputationScore: zod.coerce.number().optional(),
+  isBlacklisted: zod.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  page: zod.coerce.number().int().default(1),
+  pageSize: zod.coerce.number().int().max(100).default(20),
+});
+
+export const getMarketStatsParams = zod.object({
+  neighbourhood: zod.string(),
+  listingType: zod.enum(["rent", "sale"]).default("rent"),
+  days: zod.coerce.number().int().default(30),
+});
+
+export const getMarketTrendsParams = zod.object({
+  neighbourhood: zod.string(),
+  listingType: zod.enum(["rent", "sale"]).default("rent"),
+  days: zod.coerce.number().int().default(90),
 });

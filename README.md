@@ -404,7 +404,7 @@ Automated on push to `main`:
 | 5 | Image hashing + dedup (pHash) | ✅ Complete |
 | 6 | Duplicate clustering engine | ✅ Complete |
 | 7 | Fraud score v1 (explainable, 6 signals) | ✅ Complete |
-| 8 | Fraud report product | 📋 Planned |
+| 8 | Express API routes + HTML report generator + email delivery | ✅ Complete |
 | 9 | Next.js frontend v1 | 📋 Planned |
 | 10 | Market intelligence dashboard | 📋 Planned |
 | 11 | Agent reputation system | 📋 Planned |
