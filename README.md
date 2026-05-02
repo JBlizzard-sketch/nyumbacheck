@@ -399,11 +399,11 @@ Automated on push to `main`:
 |---|---|---|
 | 1 | PostgreSQL schema + Drizzle ORM | ✅ Complete |
 | 2 | Python scraper infrastructure | ✅ Complete |
-| 3 | BuyRentKenya + JumiaHouses scrapers | 🔄 In Progress |
-| 4 | Address normalisation engine | 🔄 In Progress |
-| 5 | Image hashing + dedup | 📋 Planned |
-| 6 | Duplicate clustering engine | 📋 Planned |
-| 7 | Fraud score v1 | 📋 Planned |
+| 3 | BuyRentKenya + JumiaHouses scrapers | ✅ Complete |
+| 4 | Address normalisation engine | ✅ Complete |
+| 5 | Image hashing + dedup (pHash) | ✅ Complete |
+| 6 | Duplicate clustering engine | ✅ Complete |
+| 7 | Fraud score v1 (explainable, 6 signals) | ✅ Complete |
 | 8 | Fraud report product | 📋 Planned |
 | 9 | Next.js frontend v1 | 📋 Planned |
 | 10 | Market intelligence dashboard | 📋 Planned |
