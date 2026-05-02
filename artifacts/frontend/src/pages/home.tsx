@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -526,8 +526,10 @@ function TestimonialsSection() {
 }
 
 export default function HomePage() {
+  const [, setLocation] = useLocation();
   const { data: stats } = useStats();
   const { data: compareData } = useNeighbourhoodRisk();
+  const [quickPhone, setQuickPhone] = useState("");
 
   const reportsAnalyzed = stats?.reports.complete ?? 0;
   const scammersTracked = stats?.scammerRegistry.total ?? 0;
@@ -565,6 +567,41 @@ export default function HomePage() {
               </Button>
             </Link>
           </div>
+
+          {/* Quick scammer check */}
+          <div className="mt-8 max-w-sm mx-auto">
+            <p className="text-xs text-primary-foreground/50 mb-2.5 uppercase tracking-widest font-semibold">
+              Got a suspicious number?
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const val = quickPhone.trim();
+                if (val) setLocation(`${BASE}/scammer?phone=${encodeURIComponent(val)}`);
+              }}
+              className="flex gap-2"
+            >
+              <div className="relative flex-1">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                <input
+                  type="text"
+                  value={quickPhone}
+                  onChange={(e) => setQuickPhone(e.target.value)}
+                  placeholder="0712 345 678"
+                  className="w-full h-11 pl-10 pr-4 bg-white/15 border border-white/25 rounded-lg text-white placeholder:text-white/35 text-sm focus:outline-none focus:ring-2 focus:ring-white/25 transition-colors"
+                />
+              </div>
+              <Button
+                type="submit"
+                size="sm"
+                className="h-11 px-5 bg-white/20 hover:bg-white/30 text-white border border-white/25 font-medium"
+                disabled={!quickPhone.trim()}
+              >
+                Check
+              </Button>
+            </form>
+          </div>
+
           <PlatformSourcesStrip />
         </div>
       </section>

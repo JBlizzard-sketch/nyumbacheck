@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLookupScammer } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, CheckCircle, Phone, Loader2, ShieldAlert, Flag, User, ArrowRight, Users, TrendingUp, Copy } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { toast } from "sonner";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -156,6 +156,18 @@ function useAgentByPhone(phone: string) {
 export default function ScammerPage() {
   const [phone, setPhone] = useState("");
   const [submitted, setSubmitted] = useState("");
+
+  // Auto-submit if ?phone= URL param is present on mount
+  const search = useSearch();
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const phoneParam = params.get("phone");
+    if (phoneParam) {
+      const cleaned = phoneParam.trim();
+      setPhone(cleaned);
+      setSubmitted(cleaned);
+    }
+  }, []); // intentionally run once on mount only
 
   const handleSearchFromLeaderboard = (normalisedPhone: string) => {
     setPhone(normalisedPhone);

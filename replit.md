@@ -1,5 +1,9 @@
 # NyumbaCheck — Real Estate Fraud Detection Platform
 
+## Phase 36 Complete
+- **Home hero — "Quick phone check" form**: Compact phone input with "GOT A SUSPICIOUS NUMBER?" label and "Check" button added below the main hero CTAs. On submit, navigates to `/scammer?phone=<number>` so the lookup auto-triggers.
+- **Scammer page — `?phone=` URL param auto-submit**: On mount, reads the `phone` query param via `useSearch` (wouter) and auto-fills + auto-submits the lookup. Deep-linkable from WhatsApp shares, the home quick-check, or any external link.
+
 ## Phase 35 Complete
 - **Fraud Feed — neighbourhood detection + filter**: API `/recent-public` now infers neighbourhood from `inputAddress`/`inputUrl` via keyword matching against 20 Nairobi areas and returns it in the feed response. `FeedCard` shows a `MapPin + neighbourhood` pill badge on each card that has location data. Dynamic neighbourhood filter row auto-populates from detected areas in the current page; clicking a neighbourhood pill filters the feed client-side. Location coverage note shows how many of the current page's checks have inferred location data.
 - **Fixed riskLevel pagination bug**: The `recent-public` endpoint now applies the `riskLevel` filter in SQL (not in-memory JS), so the COUNT query and paginated results are accurate.
