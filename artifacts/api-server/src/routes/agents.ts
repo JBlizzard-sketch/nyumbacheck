@@ -110,4 +110,40 @@ router.get("/agents/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ── GET /agents/by-phone/:phone ────────────────────────────────────────────────
+
+router.get("/agents/by-phone/:phone", async (req: Request, res: Response) => {
+  const raw = decodeURIComponent(req.params["phone"] as string).trim();
+  if (!raw || raw.length < 7) {
+    res.status(400).json({ error: "bad_request", message: "Invalid phone number" });
+    return;
+  }
+
+  // normalise: strip non-digit/+, convert 07x → +2547x
+  const digits = raw.replace(/[^\d+]/g, "");
+  let normalised = digits;
+  if (digits.startsWith("+254")) normalised = digits;
+  else if (digits.startsWith("254")) normalised = "+" + digits;
+  else if (digits.startsWith("07") || digits.startsWith("01")) normalised = "+254" + digits.slice(1);
+  else if (digits.startsWith("7") || digits.startsWith("1")) normalised = "+254" + digits;
+
+  try {
+    const [phoneRow] = await db
+      .select({ agentId: agentPhoneNumbersTable.agentId })
+      .from(agentPhoneNumbersTable)
+      .where(eq(agentPhoneNumbersTable.normalised, normalised))
+      .limit(1);
+
+    if (!phoneRow) {
+      res.json({ found: false, agentId: null });
+      return;
+    }
+
+    res.json({ found: true, agentId: phoneRow.agentId });
+  } catch (err) {
+    logger.error({ err, normalised }, "agents.by_phone_error");
+    res.status(500).json({ error: "internal_error", message: "Lookup failed" });
+  }
+});
+
 export default router;

@@ -1,15 +1,30 @@
 import { useState } from "react";
 import { useLookupScammer } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, CheckCircle, Phone, Loader2, ShieldAlert, Flag } from "lucide-react";
+import { AlertTriangle, CheckCircle, Phone, Loader2, ShieldAlert, Flag, User, ArrowRight, Users } from "lucide-react";
+import { Link } from "wouter";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type ReportState = "idle" | "submitting" | "success" | "error";
+
+function useAgentByPhone(phone: string) {
+  return useQuery<{ found: boolean; agentId: number | null }>({
+    queryKey: ["agent-by-phone", phone],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/agents/by-phone/${encodeURIComponent(phone)}`);
+      if (!r.ok) throw new Error("lookup failed");
+      return r.json() as Promise<{ found: boolean; agentId: number | null }>;
+    },
+    enabled: !!phone,
+    staleTime: 60_000,
+  });
+}
 
 export default function ScammerPage() {
   const [phone, setPhone] = useState("");
@@ -25,6 +40,7 @@ export default function ScammerPage() {
     { phone: submitted },
     { query: { enabled: !!submitted, retry: 1 } },
   );
+  const { data: agentLookup } = useAgentByPhone(submitted);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,7 +149,7 @@ export default function ScammerPage() {
                   )}
                   {data.isConfirmed && (
                     <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">
-                      Confirmed fraud case
+                      ✓ Confirmed fraud case
                     </p>
                   )}
                   {data.notes && (
@@ -142,19 +158,35 @@ export default function ScammerPage() {
                     </div>
                   )}
                   <div className="mt-2 p-3 bg-red-100 border border-red-200 rounded-lg">
-                    <p className="text-sm font-semibold text-red-900">
-                      Do not send money to this number.
-                    </p>
-                    <p className="text-xs text-red-700 mt-1">
-                      Always verify a landlord or agent in person before paying any deposit.
-                    </p>
+                    <p className="text-sm font-semibold text-red-900">Do not send money to this number.</p>
+                    <p className="text-xs text-red-700 mt-1">Always verify a landlord or agent in person before paying any deposit.</p>
                   </div>
+                  {agentLookup?.found && agentLookup.agentId != null && (
+                    <Link href={`/agent/${agentLookup.agentId}`}>
+                      <button className="flex items-center gap-2 w-full mt-1 p-3 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
+                        <User className="h-4 w-4" />
+                        View Full Agent Profile
+                        <ArrowRight className="h-4 w-4 ml-auto" />
+                      </button>
+                    </Link>
+                  )}
                 </>
               ) : (
-                <p className="text-sm text-green-700">
-                  This number has not been reported in our database. Exercise standard caution — our
-                  registry covers only confirmed fraud cases.
-                </p>
+                <>
+                  <p className="text-sm text-green-700">
+                    This number has not been reported in our database. Exercise standard caution — our
+                    registry covers only confirmed fraud cases.
+                  </p>
+                  {agentLookup?.found && agentLookup.agentId != null && (
+                    <Link href={`/agent/${agentLookup.agentId}`}>
+                      <button className="flex items-center gap-2 w-full mt-2 p-3 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                        <User className="h-4 w-4" />
+                        View Agent Profile in Directory
+                        <ArrowRight className="h-4 w-4 ml-auto" />
+                      </button>
+                    </Link>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

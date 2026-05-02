@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { Show, useUser, useClerk } from "@clerk/react";
-import { Shield, Home, TrendingUp, Phone, List, LogOut, ShieldCheck } from "lucide-react";
+import { Shield, Home, TrendingUp, Phone, List, LogOut, ShieldCheck, Users } from "lucide-react";
 import { Button } from "./ui/button";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -24,6 +24,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </Link>
             <Link href="/scammer" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
               <Phone className="h-4 w-4" /> Scammer Lookup
+            </Link>
+            <Link href="/agents" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
+              <Users className="h-4 w-4" /> Agents
             </Link>
             <Link href="/verify" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors flex items-center gap-1">
               <ShieldCheck className="h-4 w-4" /> Get Verified
@@ -72,6 +75,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <div><Link href="/check" className="hover:text-primary transition-colors">Check Property</Link></div>
                   <div><Link href="/scammer" className="hover:text-primary transition-colors">Scammer Lookup</Link></div>
                   <div><Link href="/market" className="hover:text-primary transition-colors">Market Intel</Link></div>
+                  <div><Link href="/agents" className="hover:text-primary transition-colors">Agent Directory</Link></div>
                 </div>
               </div>
               <div>
