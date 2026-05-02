@@ -1,6 +1,4 @@
 import { pgTable, text, serial, timestamp, boolean } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 
 export const platformsTable = pgTable("platforms", {
   id: serial("id").primaryKey(),
@@ -12,6 +10,5 @@ export const platformsTable = pgTable("platforms", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertPlatformSchema = createInsertSchema(platformsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertPlatform = z.infer<typeof insertPlatformSchema>;
 export type Platform = typeof platformsTable.$inferSelect;
+export type InsertPlatform = typeof platformsTable.$inferInsert;
