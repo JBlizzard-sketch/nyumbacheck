@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff } from "lucide-react";
+import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff, Scale, AlertTriangle, ShieldAlert, ArrowRight } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -313,6 +313,238 @@ function NeighbourhoodCompareChart({
   );
 }
 
+type MarketStats = {
+  medianPriceKsh: number | null;
+  activeListings: number;
+  medianDaysOnMarket: number | null;
+  medianPricePerSqftKsh: number | null;
+  duplicateRate: number | null;
+  avgFraudScore: number | null;
+  highFraudListings: number;
+};
+
+type NbhdOption = { slug: string; name: string };
+
+function ComparePanel({
+  listingType,
+  neighbourhoods,
+}: {
+  listingType: "rent" | "sale";
+  neighbourhoods: NbhdOption[];
+}) {
+  const [slugA, setSlugA] = useState("");
+  const [slugB, setSlugB] = useState("");
+
+  const fetchStats = async (slug: string) => {
+    const r = await fetch(
+      `${BASE}/api/market/stats?neighbourhood=${slug}&listingType=${listingType}&days=30`
+    );
+    if (!r.ok) throw new Error("failed");
+    return r.json() as Promise<MarketStats>;
+  };
+
+  const { data: statsA, isLoading: loadingA } = useQuery<MarketStats>({
+    queryKey: ["cmp-a", slugA, listingType],
+    queryFn: () => fetchStats(slugA),
+    enabled: !!slugA,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: statsB, isLoading: loadingB } = useQuery<MarketStats>({
+    queryKey: ["cmp-b", slugB, listingType],
+    queryFn: () => fetchStats(slugB),
+    enabled: !!slugB,
+    staleTime: 5 * 60_000,
+  });
+
+  const nameA = neighbourhoods.find((n) => n.slug === slugA)?.name ?? slugA;
+  const nameB = neighbourhoods.find((n) => n.slug === slugB)?.name ?? slugB;
+  const bothSelected = !!slugA && !!slugB;
+
+  type MetricDef = {
+    label: string;
+    icon: React.ElementType;
+    valueA: number | null;
+    valueB: number | null;
+    format: (v: number) => string;
+    lowerIsBetter: boolean;
+    tooltip?: string;
+  };
+
+  const metrics: MetricDef[] = [
+    {
+      label: "Median Price",
+      icon: Home,
+      valueA: statsA?.medianPriceKsh ?? null,
+      valueB: statsB?.medianPriceKsh ?? null,
+      format: (v) => formatKsh(v),
+      lowerIsBetter: true,
+      tooltip: "Lower = more affordable",
+    },
+    {
+      label: "Avg Fraud Score",
+      icon: ShieldAlert,
+      valueA: statsA?.avgFraudScore ?? null,
+      valueB: statsB?.avgFraudScore ?? null,
+      format: (v) => `${Math.round(v)}/100`,
+      lowerIsBetter: true,
+      tooltip: "Lower = safer market",
+    },
+    {
+      label: "Active Listings",
+      icon: BarChart2,
+      valueA: statsA?.activeListings ?? null,
+      valueB: statsB?.activeListings ?? null,
+      format: (v) => v.toLocaleString(),
+      lowerIsBetter: false,
+      tooltip: "Higher = more choice",
+    },
+    {
+      label: "Days on Market",
+      icon: Clock,
+      valueA: statsA?.medianDaysOnMarket ?? null,
+      valueB: statsB?.medianDaysOnMarket ?? null,
+      format: (v) => `${Math.round(v)}d`,
+      lowerIsBetter: true,
+      tooltip: "Lower = more demand",
+    },
+    {
+      label: "Price / sqft",
+      icon: TrendingUp,
+      valueA: statsA?.medianPricePerSqftKsh ?? null,
+      valueB: statsB?.medianPricePerSqftKsh ?? null,
+      format: (v) => `KSh ${Math.round(v).toLocaleString()}`,
+      lowerIsBetter: true,
+    },
+    {
+      label: "Duplicate Rate",
+      icon: AlertTriangle,
+      valueA: statsA?.duplicateRate ?? null,
+      valueB: statsB?.duplicateRate ?? null,
+      format: (v) => `${(v * 100).toFixed(1)}%`,
+      lowerIsBetter: true,
+      tooltip: "Lower = cleaner listings",
+    },
+  ];
+
+  return (
+    <Card className="mb-8">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Scale className="h-5 w-5 text-primary" />
+          Head-to-Head Comparison
+        </CardTitle>
+        <p className="text-sm text-slate-500">
+          Pick two neighbourhoods to see their key market metrics side-by-side.
+          {" "}<span className="text-green-700 font-medium">✓ Green</span> = better value.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {/* Selectors */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          {[
+            { label: "Neighbourhood A", value: slugA, onChange: setSlugA, other: slugB, color: "text-primary" },
+            { label: "Neighbourhood B", value: slugB, onChange: setSlugB, other: slugA, color: "text-slate-600" },
+          ].map(({ label, value, onChange, other, color }) => (
+            <div key={label}>
+              <label className={`text-xs font-semibold mb-1.5 block ${color}`}>{label}</label>
+              <Select value={value} onValueChange={onChange}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {neighbourhoods.map((n) => (
+                    <SelectItem key={n.slug} value={n.slug} disabled={n.slug === other}>
+                      {n.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
+        </div>
+
+        {!bothSelected ? (
+          <div className="text-center py-8 text-slate-400">
+            <Scale className="h-10 w-10 mx-auto mb-2 opacity-25" />
+            <p className="text-sm">Select both neighbourhoods to see the comparison.</p>
+          </div>
+        ) : (
+          <>
+            {/* VS header */}
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center mb-4 text-center">
+              <div className="bg-primary/8 rounded-xl py-2 px-3">
+                <p className="text-xs text-slate-400 font-medium">A</p>
+                <p className="font-bold text-primary text-sm">{nameA}</p>
+              </div>
+              <div className="text-xs font-bold text-slate-300 px-1">VS</div>
+              <div className="bg-slate-50 rounded-xl py-2 px-3">
+                <p className="text-xs text-slate-400 font-medium">B</p>
+                <p className="font-bold text-slate-600 text-sm">{nameB}</p>
+              </div>
+            </div>
+
+            {/* Metric rows */}
+            <div className="rounded-xl border border-slate-100 overflow-hidden">
+              {metrics.map((m, idx) => {
+                const { valueA, valueB, format, lowerIsBetter, label, icon: Icon } = m;
+                let aWins = false, bWins = false;
+                if (valueA != null && valueB != null && valueA !== valueB) {
+                  aWins = lowerIsBetter ? valueA < valueB : valueA > valueB;
+                  bWins = !aWins;
+                }
+
+                const cellA = loadingA ? (
+                  <Skeleton className="h-6 w-16 mx-auto rounded-lg" />
+                ) : valueA != null ? (
+                  <span className={`inline-block text-sm font-semibold px-2.5 py-0.5 rounded-lg ${aWins ? "bg-green-100 text-green-800" : bWins ? "bg-amber-50 text-amber-700" : "text-slate-700"}`}>
+                    {aWins && <span className="mr-0.5">✓</span>}{format(valueA)}
+                  </span>
+                ) : <span className="text-slate-300 text-sm">—</span>;
+
+                const cellB = loadingB ? (
+                  <Skeleton className="h-6 w-16 mx-auto rounded-lg" />
+                ) : valueB != null ? (
+                  <span className={`inline-block text-sm font-semibold px-2.5 py-0.5 rounded-lg ${bWins ? "bg-green-100 text-green-800" : aWins ? "bg-amber-50 text-amber-700" : "text-slate-700"}`}>
+                    {bWins && <span className="mr-0.5">✓</span>}{format(valueB)}
+                  </span>
+                ) : <span className="text-slate-300 text-sm">—</span>;
+
+                return (
+                  <div
+                    key={label}
+                    className={`grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-3 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}
+                  >
+                    <div className="text-center">{cellA}</div>
+                    <div className="flex flex-col items-center gap-0.5 min-w-[90px]">
+                      <Icon className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="text-[10px] text-slate-400 text-center leading-tight">{label}</span>
+                    </div>
+                    <div className="text-center">{cellB}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Quick-links to full pages */}
+            <div className="flex gap-3 mt-4">
+              {[{ slug: slugA, name: nameA }, { slug: slugB, name: nameB }].map(({ slug, name }) => (
+                <a
+                  key={slug}
+                  href={`/neighbourhood/${slug}`}
+                  className="flex-1 flex items-center justify-center gap-1 text-xs font-medium text-primary border border-primary/20 rounded-lg py-2 hover:bg-primary/5 transition-colors"
+                >
+                  {name} <ArrowRight className="h-3 w-3" />
+                </a>
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function MarketPage() {
   const [neighbourhood, setNeighbourhood] = useState<string>("");
   const [listingType, setListingType] = useState<"rent" | "sale">("rent");
@@ -395,7 +627,7 @@ export default function MarketPage() {
           </Select>
         </div>
 
-        {/* Neighbourhood comparison — always visible */}
+        {/* Neighbourhood comparison bar chart — always visible */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -415,6 +647,12 @@ export default function MarketPage() {
             />
           </CardContent>
         </Card>
+
+        {/* Head-to-head comparison panel */}
+        <ComparePanel
+          listingType={listingType}
+          neighbourhoods={(nbhds?.neighbourhoods ?? []).map((n) => ({ slug: n.slug, name: n.name }))}
+        />
 
         {!neighbourhood && (
           <div className="text-center py-12 text-slate-400">
