@@ -90,7 +90,7 @@ router.get("/listings", async (req: Request, res: Response) => {
 // ── GET /listings/:id ─────────────────────────────────────────────────────────
 
 router.get("/listings/:id", async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params["id"] as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "bad_request", message: "Invalid listing ID" });
     return;

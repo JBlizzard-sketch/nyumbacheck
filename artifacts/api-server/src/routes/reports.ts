@@ -71,7 +71,7 @@ router.post("/reports", async (req: Request, res: Response) => {
 // ── GET /reports/:id ──────────────────────────────────────────────────────────
 
 router.get("/reports/:id", async (req: Request, res: Response) => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(req.params["id"] as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "bad_request", message: "Invalid report ID" });
     return;
