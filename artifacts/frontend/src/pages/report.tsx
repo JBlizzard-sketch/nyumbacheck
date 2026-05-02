@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Share2, Copy, MessageCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Copy, MessageCircle, Download } from "lucide-react";
 import { toast } from "sonner";
+import { generateReportPdf } from "@/lib/report-pdf";
 
 const riskColors: Record<string, string> = {
   low: "bg-green-100 text-green-800 border-green-200",
@@ -199,6 +200,29 @@ export default function ReportPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(waText)}`, "_blank", "noopener");
   }
 
+  function handleDownloadPdf() {
+    generateReportPdf({
+      id: reportData.id,
+      status: reportData.status,
+      inputUrl: reportData.inputUrl,
+      inputAddress: reportData.inputAddress,
+      email: reportData.email,
+      createdAt: reportData.createdAt,
+      fraudScore: reportData.fraudScore
+        ? {
+            score: reportData.fraudScore.score,
+            riskLevel: reportData.fraudScore.riskLevel,
+            summary: reportData.fraudScore.summary,
+            signals: reportData.fraudScore.signals as { label: string; description: string; contribution?: number }[],
+          }
+        : undefined,
+      duplicateListings: reportData.duplicateListings as Array<{ platform: string; url: string; priceKsh?: number | null; agentPhone?: string | null }> | undefined,
+      platformCount: (reportData as { platformCount?: number }).platformCount ?? null,
+      priceRangeKsh: (reportData as { priceRangeKsh?: { min: number; max: number } }).priceRangeKsh ?? null,
+    });
+    toast.success("PDF downloaded");
+  }
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-12 max-w-4xl space-y-6">
@@ -213,7 +237,12 @@ export default function ReportPage() {
             <h1 className="text-3xl font-bold text-slate-900">Fraud Analysis Report #{reportData.id}</h1>
             <p className="text-slate-500 mt-1 text-sm truncate max-w-lg">{input}</p>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+          <div className="flex items-center gap-2 flex-shrink-0 mt-1 flex-wrap justify-end">
+            {reportData.status === "complete" && reportData.fraudScore && (
+              <Button variant="outline" size="sm" className="gap-1.5 h-9" onClick={handleDownloadPdf}>
+                <Download className="h-3.5 w-3.5" /> Download PDF
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="gap-1.5 h-9" onClick={handleCopy}>
               <Copy className="h-3.5 w-3.5" /> Copy link
             </Button>
