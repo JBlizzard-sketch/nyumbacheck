@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { agentsTable, agentPhoneNumbersTable } from "@workspace/db/schema";
+import { agentsTable, agentPhoneNumbersTable, rawListingsTable, fraudScoresTable, reportRequestsTable } from "@workspace/db/schema";
 import { eq, and, gte, ilike, or, count, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
@@ -107,6 +107,58 @@ router.get("/agents/:id", async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err, id }, "agents.get_error");
     res.status(500).json({ error: "internal_error", message: "Failed to fetch agent" });
+  }
+});
+
+// ── GET /agents/:id/reports ───────────────────────────────────────────────────
+
+router.get("/agents/:id/reports", async (req: Request, res: Response) => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "bad_request", message: "Invalid agent ID" });
+    return;
+  }
+
+  try {
+    const reports = await db
+      .select({
+        id: reportRequestsTable.id,
+        inputUrl: reportRequestsTable.inputUrl,
+        inputAddress: reportRequestsTable.inputAddress,
+        createdAt: reportRequestsTable.createdAt,
+        score: fraudScoresTable.score,
+        riskLevel: fraudScoresTable.riskLevel,
+        neighbourhood: rawListingsTable.neighbourhood,
+        listingType: rawListingsTable.listingType,
+      })
+      .from(reportRequestsTable)
+      .innerJoin(fraudScoresTable, eq(reportRequestsTable.fraudScoreId, fraudScoresTable.id))
+      .innerJoin(rawListingsTable, eq(fraudScoresTable.listingId, rawListingsTable.id))
+      .where(and(
+        eq(rawListingsTable.agentId, id),
+        eq(reportRequestsTable.status, "complete"),
+      ))
+      .orderBy(sql`${reportRequestsTable.createdAt} DESC`)
+      .limit(10);
+
+    const counts = reports.reduce(
+      (acc, r) => {
+        if (r.riskLevel === "high" || r.riskLevel === "critical") acc.highRisk++;
+        if (r.score != null) { acc.scoreSum += r.score; acc.scoredCount++; }
+        return acc;
+      },
+      { highRisk: 0, scoreSum: 0, scoredCount: 0 }
+    );
+
+    res.json({
+      reports,
+      total: reports.length,
+      highRiskCount: counts.highRisk,
+      avgScore: counts.scoredCount > 0 ? Math.round(counts.scoreSum / counts.scoredCount) : null,
+    });
+  } catch (err) {
+    logger.error({ err, id }, "agents.reports_error");
+    res.status(500).json({ error: "internal_error", message: "Failed to fetch agent reports" });
   }
 });
 

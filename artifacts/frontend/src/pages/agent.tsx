@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ShieldCheck, ShieldAlert, ShieldX, Phone, Building2,
-  TrendingDown, AlertTriangle, CheckCircle, Loader2, ArrowLeft, ExternalLink, Copy
+  TrendingDown, AlertTriangle, CheckCircle, Loader2, ArrowLeft, ExternalLink, Copy,
+  FileText, Clock, ArrowRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePageMeta } from "@/lib/use-page-meta";
@@ -27,6 +30,119 @@ type Agent = {
   blacklistReason: string | null;
   phoneNumbers: string[];
 };
+
+// ── Agent Reports Section ─────────────────────────────────────────────────────
+type AgentReport = {
+  id: number;
+  inputUrl: string | null;
+  inputAddress: string | null;
+  createdAt: string;
+  score: number | null;
+  riskLevel: string | null;
+  neighbourhood: string | null;
+  listingType: string | null;
+};
+
+type AgentReportsData = {
+  reports: AgentReport[];
+  total: number;
+  highRiskCount: number;
+  avgScore: number | null;
+};
+
+const AGENT_RISK: Record<string, { dot: string; badge: string; text: string; bar: string }> = {
+  critical: { dot: "bg-red-500",    badge: "bg-red-100 text-red-800 border-red-200",       text: "text-red-700",    bar: "#ef4444" },
+  high:     { dot: "bg-orange-500", badge: "bg-orange-100 text-orange-800 border-orange-200", text: "text-orange-700", bar: "#f97316" },
+  medium:   { dot: "bg-amber-400",  badge: "bg-amber-100 text-amber-800 border-amber-200",   text: "text-amber-700",  bar: "#f59e0b" },
+  low:      { dot: "bg-green-500",  badge: "bg-green-100 text-green-800 border-green-200",   text: "text-green-700",  bar: "#22c55e" },
+};
+
+function timeAgoAgent(iso: string) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function AgentReportsSection({ agentId }: { agentId: number }) {
+  const { data, isLoading } = useQuery<AgentReportsData>({
+    queryKey: ["agent-reports", agentId],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/agents/${agentId}/reports`);
+      if (!r.ok) throw new Error("failed");
+      return r.json() as Promise<AgentReportsData>;
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  if (!isLoading && (!data || data.total === 0)) return null;
+
+  const reports = data?.reports ?? [];
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            Fraud Reports Checked Against This Agent
+          </CardTitle>
+          {data && data.total > 0 && (
+            <div className="flex items-center gap-3 text-xs text-slate-500">
+              <span><strong className="text-slate-800">{data.total}</strong> total</span>
+              {data.highRiskCount > 0 && (
+                <span className="text-orange-600 font-semibold">{data.highRiskCount} high/critical</span>
+              )}
+              {data.avgScore != null && (
+                <span>avg <strong className="text-slate-800">{data.avgScore}/100</strong></span>
+              )}
+            </div>
+          )}
+        </div>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Anonymised fraud checks on listings associated with this agent.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {reports.map((r) => {
+              const meta = AGENT_RISK[r.riskLevel ?? "low"] ?? AGENT_RISK.low;
+              const label = r.inputUrl ? new URL(r.inputUrl).hostname.replace("www.", "") : (r.inputAddress ?? `Report #${r.id}`);
+              return (
+                <Link key={r.id} href={`/reports/${r.id}`}>
+                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-all cursor-pointer group">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${meta.dot}`} />
+                    <Badge className={`text-xs border capitalize flex-shrink-0 ${meta.badge}`}>
+                      {r.riskLevel ?? "—"} risk
+                    </Badge>
+                    <span className="text-xs font-mono text-slate-700 flex-shrink-0 w-12">
+                      {r.score != null ? `${Math.round(r.score)}/100` : "—"}
+                    </span>
+                    <span className="text-xs text-slate-500 truncate flex-1">{label}</span>
+                    {r.neighbourhood && (
+                      <span className="text-xs text-slate-400 capitalize flex-shrink-0 hidden sm:block">{r.neighbourhood}</span>
+                    )}
+                    <span className="text-xs text-slate-400 flex-shrink-0 flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> {timeAgoAgent(r.createdAt)}
+                    </span>
+                    <ArrowRight className="h-3.5 w-3.5 text-slate-300 flex-shrink-0 group-hover:text-primary transition-colors" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function ReputationArc({ score, isBlacklisted }: { score: number; isBlacklisted: boolean }) {
   const r = 52;
@@ -322,6 +438,9 @@ export default function AgentPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Fraud reports section */}
+        <AgentReportsSection agentId={agent.id} />
 
         {/* Bottom CTA */}
         <div className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">

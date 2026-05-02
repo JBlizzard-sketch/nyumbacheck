@@ -1,5 +1,8 @@
 # NyumbaCheck — Real Estate Fraud Detection Platform
 
+## Phase 40 Complete
+- **Agent profile "Fraud Reports" section**: Each agent profile page (`/agent/:id`) now shows a "Fraud Reports Checked Against This Agent" card below the metrics grid. New API endpoint `GET /api/agents/:id/reports` joins `report_requests → fraud_scores → raw_listings → agents` to find all completed public fraud checks on listings associated with that agent, returning up to 10 results with score, riskLevel, neighbourhood, listingType, and timestamp. Card header shows total count, high/critical count, and average score. Each row shows: risk colour dot, risk badge, score/100, listing source, neighbourhood, relative timestamp, clickable arrow → full report. Section auto-hides when the agent has no associated reports yet.
+
 ## Phase 39 Complete
 - **Neighbourhood page "Recent Fraud Checks" live feed**: Each neighbourhood detail page (`/neighbourhood/:slug`) now shows a "Recent Fraud Checks in [Area]" card between the Active Listings chart and the Price Alert section. Fetches from `/api/reports/recent-public?limit=5&neighbourhood={slug}` — shows up to 5 anonymised reports with animated pulsing-dot header, risk level badge (Critical/High/Medium/Low with colour-coded backgrounds), fraud score/100, signal count, and relative timestamp. Each row is clickable → full report. "See all →" links to the fraud feed. Card hides automatically if no checks exist for that neighbourhood yet.
 
