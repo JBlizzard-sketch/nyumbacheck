@@ -8,7 +8,7 @@ import {
   ShieldAlert, Search, LineChart, ArrowRight, Copy, Phone,
   ImageOff, MapPin, Clock, BarChart3, ShieldCheck, Users,
   AlertTriangle, TrendingUp, CheckCircle, ExternalLink,
-  Radio
+  Radio, Star, Zap, Building2, Quote
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -275,6 +275,186 @@ function SampleReportPreview() {
   );
 }
 
+const PRICING_PLANS = [
+  {
+    name: "Single Check",
+    price: "KSh 500",
+    sub: "per report",
+    badge: null,
+    icon: Zap,
+    color: "border-slate-200 bg-white",
+    btnVariant: "outline" as const,
+    features: [
+      "Full 0–100 fraud risk score",
+      "6 independently-weighted signals",
+      "Cross-platform duplicate detection",
+      "Agent phone scammer check",
+      "PDF download + shareable link",
+      "Result delivered in < 5 minutes",
+    ],
+    cta: "Check a Listing",
+    href: "/check",
+  },
+  {
+    name: "Professional",
+    price: "KSh 3,500",
+    sub: "per month · unlimited checks",
+    badge: "Most Popular",
+    icon: Building2,
+    color: "border-primary bg-primary text-primary-foreground",
+    btnVariant: "secondary" as const,
+    features: [
+      "Everything in Single Check",
+      "Unlimited fraud reports",
+      "Priority processing (< 2 min)",
+      "Neighbourhood market snapshots",
+      "Price alert notifications",
+      "Agent directory access",
+    ],
+    cta: "Get Started Free",
+    href: "/sign-up",
+  },
+];
+
+const TESTIMONIALS = [
+  {
+    name: "Amina Wanjiku",
+    role: "Tenant · Westlands",
+    quote:
+      "I almost sent KSh 80,000 as a deposit for a 2-bed in Westlands. NyumbaCheck scored it 74/100 and flagged the same photos on three other listings. Saved me from a disaster.",
+    stars: 5,
+  },
+  {
+    name: "Brian Ochieng",
+    role: "Property Manager · Karen",
+    quote:
+      "As a landlord, I use NyumbaCheck to verify agents before listing with them. The scammer registry caught one agent who had four prior complaints I had no way of knowing about.",
+    stars: 5,
+  },
+  {
+    name: "Cecilia Muthoni",
+    role: "First-time Renter · Kilimani",
+    quote:
+      "The report explained every signal in plain English. I could share the link with my mum so she understood exactly why the listing was suspicious. The PDF is brilliant.",
+    stars: 5,
+  },
+  {
+    name: "David Kamau",
+    role: "Real Estate Agent · Nairobi CBD",
+    quote:
+      "I recommend NyumbaCheck to every client before they pay any money. It's become a standard part of how I do business — it protects my reputation as much as theirs.",
+    stars: 5,
+  },
+];
+
+function PricingSection() {
+  return (
+    <section className="py-20 bg-slate-50 px-4">
+      <div className="container mx-auto max-w-4xl">
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 bg-primary/10 text-primary text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
+            <Star className="h-3.5 w-3.5" /> Simple, transparent pricing
+          </div>
+          <h2 className="text-3xl font-bold text-slate-900 mb-3">Pay once. Get the truth.</h2>
+          <p className="text-slate-500 max-w-xl mx-auto">
+            No subscriptions required to get started. One check costs less than a matatu ride — and can save you months of rent.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+          {PRICING_PLANS.map((plan) => {
+            const Icon = plan.icon;
+            const isPrimary = plan.badge != null;
+            return (
+              <div
+                key={plan.name}
+                className={`relative rounded-2xl border-2 p-8 flex flex-col ${plan.color} ${isPrimary ? "shadow-xl shadow-primary/20" : "shadow-sm"}`}
+              >
+                {plan.badge && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className="bg-amber-400 text-amber-900 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                      {plan.badge}
+                    </span>
+                  </div>
+                )}
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${isPrimary ? "bg-white/20" : "bg-primary/10"}`}>
+                  <Icon className={`h-6 w-6 ${isPrimary ? "text-white" : "text-primary"}`} />
+                </div>
+                <p className={`text-sm font-semibold uppercase tracking-wide mb-1 ${isPrimary ? "text-white/70" : "text-slate-400"}`}>{plan.name}</p>
+                <div className="flex items-baseline gap-2 mb-1">
+                  <span className={`text-4xl font-bold ${isPrimary ? "text-white" : "text-slate-900"}`}>{plan.price}</span>
+                </div>
+                <p className={`text-sm mb-6 ${isPrimary ? "text-white/60" : "text-slate-400"}`}>{plan.sub}</p>
+
+                <ul className="space-y-2.5 mb-8 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm">
+                      <CheckCircle className={`h-4 w-4 flex-shrink-0 mt-0.5 ${isPrimary ? "text-white/80" : "text-green-600"}`} />
+                      <span className={isPrimary ? "text-white/90" : "text-slate-600"}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Link href={plan.href}>
+                  <Button
+                    className={`w-full font-semibold ${isPrimary ? "bg-white text-primary hover:bg-slate-100" : ""}`}
+                    variant={isPrimary ? "ghost" : "default"}
+                    size="lg"
+                  >
+                    {plan.cta} <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="text-center text-xs text-slate-400 mt-6">
+          M-Pesa · Visa · Mastercard accepted · All prices in Kenyan Shillings including VAT
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function TestimonialsSection() {
+  return (
+    <section className="py-20 bg-white px-4">
+      <div className="container mx-auto max-w-5xl">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-slate-900 mb-3">Trusted by Nairobi renters &amp; landlords</h2>
+          <p className="text-slate-500 max-w-xl mx-auto">
+            Real stories from people who used NyumbaCheck before signing a lease or paying a deposit.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-5">
+          {TESTIMONIALS.map((t) => (
+            <div key={t.name} className="relative bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4">
+              <Quote className="absolute top-5 right-5 h-6 w-6 text-slate-100" />
+              <div className="flex gap-0.5">
+                {Array.from({ length: t.stars }).map((_, i) => (
+                  <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                ))}
+              </div>
+              <p className="text-sm text-slate-700 leading-relaxed flex-1">"{t.quote}"</p>
+              <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
+                  {t.name[0]}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{t.name}</p>
+                  <p className="text-xs text-slate-400">{t.role}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function HomePage() {
   const { data: stats } = useStats();
   const { data: compareData } = useNeighbourhoodRisk();
@@ -463,6 +643,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <PricingSection />
+
       {/* Recent Fraud Alerts feed */}
       <RecentFraudFeed />
 
@@ -490,6 +673,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Testimonials */}
+      <TestimonialsSection />
 
       {/* Trust strip */}
       <section className="py-10 bg-primary/5 border-y border-primary/10 px-4">
