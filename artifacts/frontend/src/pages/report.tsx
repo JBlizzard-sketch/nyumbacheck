@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Copy, MessageCircle, Download } from "lucide-react";
+import { AlertTriangle, CheckCircle, Clock, XCircle, ExternalLink, CreditCard, Lock, Loader2, Search, FileCheck, Copy, MessageCircle, Download, ShieldCheck, ShieldAlert, Phone, TrendingDown, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { generateReportPdf } from "@/lib/report-pdf";
 import { usePageMeta } from "@/lib/use-page-meta";
@@ -17,6 +17,180 @@ const riskColors: Record<string, string> = {
   high: "bg-orange-100 text-orange-800 border-orange-200",
   critical: "bg-red-100 text-red-800 border-red-200",
 };
+
+// ── Platform badge colours ────────────────────────────────────────────────────
+const PLATFORM_META: Record<string, { label: string; bg: string; text: string }> = {
+  buyrentkenya: { label: "BuyRentKenya", bg: "bg-blue-100", text: "text-blue-800" },
+  jiji:         { label: "Jiji",          bg: "bg-orange-100", text: "text-orange-800" },
+  jumia:        { label: "Jumia House",   bg: "bg-amber-100",  text: "text-amber-800" },
+  propertysearch: { label: "PropertySearch", bg: "bg-purple-100", text: "text-purple-800" },
+  housesgalore: { label: "HousesGalore", bg: "bg-teal-100",   text: "text-teal-800" },
+};
+function platformMeta(p: string) {
+  const key = p.toLowerCase().replace(/[^a-z]/g, "");
+  return PLATFORM_META[key] ?? { label: p, bg: "bg-slate-100", text: "text-slate-700" };
+}
+
+// ── What To Do Next config ────────────────────────────────────────────────────
+const VERDICT: Record<string, { headline: string; color: string; steps: string[] }> = {
+  critical: {
+    headline: "Do NOT proceed with this listing",
+    color: "border-red-300 bg-red-50",
+    steps: [
+      "Do not pay any deposit or reservation fee to this agent.",
+      "Report the listing to the property portal (Jiji, BuyRentKenya, etc.).",
+      "Add this agent's phone number to the NyumbaCheck Scammer Registry.",
+      "Share this report with friends to warn others.",
+      "If you have already paid, contact the Kenya Police Cybercrime Unit.",
+    ],
+  },
+  high: {
+    headline: "Proceed with extreme caution",
+    color: "border-orange-300 bg-orange-50",
+    steps: [
+      "Do not pay any deposit before a verified in-person property visit.",
+      "Demand to see the original title deed or lease agreement.",
+      "Cross-check the agent's phone in the Scammer Registry below.",
+      "Verify the landlord's identity and ownership documents.",
+      "Use a licensed property lawyer to review any agreements.",
+    ],
+  },
+  medium: {
+    headline: "Some concerns detected — verify before committing",
+    color: "border-amber-200 bg-amber-50",
+    steps: [
+      "Visit the property in person before paying anything.",
+      "Ask the agent for identification and proof of mandate.",
+      "Search the property address on other portals to cross-check the price.",
+      "Confirm the monthly rent matches the listing across platforms.",
+    ],
+  },
+  low: {
+    headline: "Listing appears legitimate",
+    color: "border-green-200 bg-green-50",
+    steps: [
+      "Standard due diligence still applies — visit the property in person.",
+      "Request a signed tenancy agreement before any payment.",
+      "Confirm bank account details directly with the agent before transfer.",
+    ],
+  },
+};
+
+// ── Signal card with contribution bar ────────────────────────────────────────
+type Signal = { label: string; description: string; score?: number; contribution?: number };
+
+function SignalCard({ signal, maxContrib }: { signal: Signal; maxContrib: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const contrib = signal.contribution ?? signal.score ?? 0;
+  const pct = maxContrib > 0 ? Math.round((contrib / maxContrib) * 100) : 0;
+  const borderColor = contrib >= 20 ? "border-l-red-400" : contrib >= 10 ? "border-l-amber-400" : "border-l-green-400";
+  const barColor   = contrib >= 20 ? "bg-red-400"    : contrib >= 10 ? "bg-amber-400"    : "bg-green-400";
+  const textColor  = contrib >= 20 ? "text-red-700"  : contrib >= 10 ? "text-amber-700"  : "text-green-700";
+
+  return (
+    <div className={`border-l-4 ${borderColor} rounded-r-lg bg-slate-50 border border-l-4 border-slate-100 overflow-hidden`}>
+      <button
+        type="button"
+        className="w-full flex items-center gap-3 p-3 text-left"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <AlertTriangle className={`h-4 w-4 flex-shrink-0 ${textColor}`} />
+        <span className="flex-1 text-sm font-semibold text-slate-800">{signal.label}</span>
+        <span className={`text-xs font-mono font-bold ${textColor} flex-shrink-0`}>+{Math.round(contrib)}</span>
+        {expanded ? <ChevronUp className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />}
+      </button>
+      {/* Contribution bar */}
+      <div className="h-1 bg-slate-200 mx-3">
+        <div className={`h-1 ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      {expanded && (
+        <p className="text-xs text-slate-600 px-3 pt-2 pb-3 leading-relaxed">{signal.description}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Duplicate listing card ────────────────────────────────────────────────────
+type DupListing = { platform: string; url: string; priceKsh?: number | null; agentPhone?: string | null };
+
+function DuplicateCard({ dup, basePrice }: { dup: DupListing; basePrice: number | null }) {
+  const pm = platformMeta(dup.platform);
+  const delta = basePrice && dup.priceKsh ? dup.priceKsh - basePrice : null;
+  const deltaPct = delta && basePrice ? Math.round((delta / basePrice) * 100) : null;
+
+  return (
+    <div className="flex items-start gap-3 p-4 rounded-xl border border-slate-100 bg-white hover:border-slate-200 transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${pm.bg} ${pm.text}`}>{pm.label}</span>
+          {dup.agentPhone && (
+            <span className="text-xs text-slate-500 flex items-center gap-1">
+              <Phone className="h-3 w-3" /> {dup.agentPhone}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-base font-bold text-slate-900">
+            {dup.priceKsh != null ? `KSh ${dup.priceKsh.toLocaleString()}` : "Price N/A"}
+          </span>
+          {deltaPct !== null && deltaPct !== 0 && (
+            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${deltaPct < 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+              {deltaPct > 0 ? "+" : ""}{deltaPct}% vs first listing
+            </span>
+          )}
+        </div>
+      </div>
+      <a
+        href={dup.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex-shrink-0 flex items-center gap-1 text-xs text-primary hover:underline font-medium mt-1"
+      >
+        View <ExternalLink className="h-3 w-3" />
+      </a>
+    </div>
+  );
+}
+
+// ── What to do next section ───────────────────────────────────────────────────
+function WhatToDoNext({ riskLevel }: { riskLevel: string }) {
+  const v = VERDICT[riskLevel] ?? VERDICT.low;
+  const Icon = riskLevel === "critical" || riskLevel === "high" ? ShieldAlert : ShieldCheck;
+  return (
+    <Card className={`border ${v.color}`}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Icon className={`h-5 w-5 ${riskLevel === "critical" ? "text-red-600" : riskLevel === "high" ? "text-orange-600" : riskLevel === "medium" ? "text-amber-600" : "text-green-600"}`} />
+          What to do next — {v.headline}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ol className="space-y-2">
+          {v.steps.map((step, i) => (
+            <li key={i} className="flex items-start gap-3 text-sm">
+              <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${riskLevel === "critical" ? "bg-red-200 text-red-800" : riskLevel === "high" ? "bg-orange-200 text-orange-800" : riskLevel === "medium" ? "bg-amber-200 text-amber-800" : "bg-green-200 text-green-800"}`}>
+                {i + 1}
+              </span>
+              <span className="text-slate-700 leading-snug">{step}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-4 flex gap-2 flex-wrap">
+          <Link href="/scammer">
+            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs">
+              <Phone className="h-3 w-3" /> Scammer Registry
+            </Button>
+          </Link>
+          <Link href="/check">
+            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs">
+              <HelpCircle className="h-3 w-3" /> Check another listing
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 const riskGauge: Record<string, string> = {
   low: "#22c55e",
@@ -156,6 +330,41 @@ export default function ReportPage() {
     });
   }, [data]);
 
+  // ── Derive display data before any early returns (hooks must run unconditionally) ──
+  const reportData = data as {
+    id: number;
+    status: string;
+    email?: string;
+    createdAt?: string;
+    inputUrl?: string;
+    inputAddress?: string;
+    failureReason?: string;
+    platformCount?: number;
+    priceRangeKsh?: { min: number; max: number };
+    fraudScore?: {
+      score: number;
+      riskLevel: string;
+      summary: string;
+      signals?: Array<{ label: string; description: string; score?: number; contribution?: number }>;
+    };
+    duplicateListings?: Array<{ platform: string; url: string; priceKsh?: number; agentPhone?: string }>;
+  } | undefined;
+
+  const input = reportData?.inputUrl || reportData?.inputAddress || "—";
+
+  // Hook must run before any conditional returns
+  usePageMeta(
+    reportData?.fraudScore
+      ? {
+          title: `Fraud Report #${reportData.id}`,
+          description: `${input.slice(0, 80)} — NyumbaCheck fraud score: ${Math.round(reportData.fraudScore.score)}/100 (${reportData.fraudScore.riskLevel} risk). AI-powered property fraud analysis for Nairobi.`,
+          ogType: "article",
+        }
+      : reportData
+      ? { title: `Report #${reportData.id}` }
+      : null
+  );
+
   if (isNaN(reportId)) {
     return (
       <Layout>
@@ -179,7 +388,7 @@ export default function ReportPage() {
     );
   }
 
-  if (isError || !data) {
+  if (isError || !data || !reportData) {
     return (
       <Layout>
         <div className="container mx-auto px-4 py-16 text-center">
@@ -197,38 +406,7 @@ export default function ReportPage() {
     processing: <Clock className="h-5 w-5 text-blue-500 animate-spin" />,
     complete: <CheckCircle className="h-5 w-5 text-green-500" />,
     failed: <XCircle className="h-5 w-5 text-red-500" />,
-  }[(data as { status: string }).status] ?? <Clock className="h-5 w-5 text-slate-400" />;
-
-  const input = (data as { inputUrl?: string; inputAddress?: string }).inputUrl
-    || (data as { inputUrl?: string; inputAddress?: string }).inputAddress
-    || "—";
-  const reportData = data as {
-    id: number;
-    status: string;
-    email?: string;
-    inputUrl?: string;
-    inputAddress?: string;
-    failureReason?: string;
-    platformCount?: number;
-    priceRangeKsh?: { min: number; max: number };
-    fraudScore?: {
-      score: number;
-      riskLevel: string;
-      summary: string;
-      signals?: Array<{ label: string; description: string; score?: number; contribution?: number }>;
-    };
-    duplicateListings?: Array<{ platform: string; url: string; priceKsh?: number; agentPhone?: string }>;
-  };
-
-  usePageMeta(
-    reportData.fraudScore
-      ? {
-          title: `Fraud Report #${reportData.id}`,
-          description: `${input.slice(0, 80)} — NyumbaCheck fraud score: ${Math.round(reportData.fraudScore.score)}/100 (${reportData.fraudScore.riskLevel} risk). AI-powered property fraud analysis for Nairobi.`,
-          ogType: "article",
-        }
-      : { title: `Report #${reportData.id}` }
-  );
+  }[(reportData as { status: string }).status] ?? <Clock className="h-5 w-5 text-slate-400" />;
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const riskEmoji = { low: "🟢", medium: "🟡", high: "🟠", critical: "🔴" }[reportData.fraudScore?.riskLevel ?? ""] ?? "🔍";
@@ -507,23 +685,17 @@ export default function ReportPage() {
               <div className="flex-1">
                 <p className="text-slate-700 mb-6 leading-relaxed">{reportData.fraudScore.summary}</p>
                 {reportData.fraudScore.signals && reportData.fraudScore.signals.length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Fraud Signals</h3>
-                    {reportData.fraudScore.signals.map((signal, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100"
-                      >
-                        <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-slate-800">{signal.label}</p>
-                          <p className="text-xs text-slate-600 mt-0.5">{signal.description}</p>
-                        </div>
-                        <span className="ml-auto text-xs font-mono text-slate-500">
-                          {Math.round((signal.contribution ?? signal.score ?? 0))}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Fraud Signals</h3>
+                      <span className="text-xs text-slate-400">Click to expand each signal</span>
+                    </div>
+                    {[...reportData.fraudScore.signals]
+                      .sort((a, b) => (b.contribution ?? b.score ?? 0) - (a.contribution ?? a.score ?? 0))
+                      .map((signal, i) => {
+                        const maxContrib = Math.max(...reportData.fraudScore!.signals!.map((s) => s.contribution ?? s.score ?? 0));
+                        return <SignalCard key={i} signal={signal} maxContrib={maxContrib} />;
+                      })}
                   </div>
                 )}
               </div>
@@ -534,52 +706,58 @@ export default function ReportPage() {
         {/* Duplicate listings */}
         {reportData.duplicateListings && reportData.duplicateListings.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Duplicate Listings Found ({reportData.duplicateListings.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-slate-500">
-                      <th className="pb-2 pr-4 font-medium">Platform</th>
-                      <th className="pb-2 pr-4 font-medium">Price (KSh)</th>
-                      <th className="pb-2 pr-4 font-medium">Agent Phone</th>
-                      <th className="pb-2 font-medium">Link</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {reportData.duplicateListings.map((dup, i) => (
-                      <tr key={i}>
-                        <td className="py-2 pr-4 font-medium capitalize">{dup.platform}</td>
-                        <td className="py-2 pr-4 text-slate-600">
-                          {dup.priceKsh != null ? dup.priceKsh.toLocaleString() : "—"}
-                        </td>
-                        <td className="py-2 pr-4 text-slate-600">{dup.agentPhone ?? "—"}</td>
-                        <td className="py-2">
-                          <a
-                            href={dup.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline flex items-center gap-1"
-                          >
-                            View <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <TrendingDown className="h-5 w-5 text-orange-500" />
+                Duplicate Listings Found ({reportData.duplicateListings.length})
+              </CardTitle>
               {reportData.platformCount != null && (
-                <p className="mt-4 text-sm text-slate-600">
-                  Found across <strong>{reportData.platformCount} platforms</strong>.
-                  {reportData.priceRangeKsh &&
-                    ` Price range: KSh ${reportData.priceRangeKsh.min.toLocaleString()} – KSh ${reportData.priceRangeKsh.max.toLocaleString()}.`}
+                <p className="text-sm text-slate-500 mt-1">
+                  Same property detected across <strong>{reportData.platformCount} platform{reportData.platformCount !== 1 ? "s" : ""}</strong>
+                  {reportData.priceRangeKsh && (
+                    <> — price varies from <strong>KSh {reportData.priceRangeKsh.min.toLocaleString()}</strong> to <strong>KSh {reportData.priceRangeKsh.max.toLocaleString()}</strong></>
+                  )}
+                  . Price inconsistency is a key fraud signal.
                 </p>
               )}
+            </CardHeader>
+            <CardContent>
+              {/* Price spread bar */}
+              {reportData.priceRangeKsh && reportData.duplicateListings.length > 1 && (() => {
+                const { min, max } = reportData.priceRangeKsh;
+                const spread = max - min;
+                const spreadPct = min > 0 ? Math.round((spread / min) * 100) : 0;
+                return (
+                  <div className="mb-4 p-3 rounded-lg bg-orange-50 border border-orange-100">
+                    <div className="flex justify-between text-xs text-slate-500 mb-1">
+                      <span>KSh {min.toLocaleString()} (lowest)</span>
+                      <span>KSh {max.toLocaleString()} (highest)</span>
+                    </div>
+                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-2 bg-orange-400 rounded-full" style={{ width: "100%" }} />
+                    </div>
+                    <p className="text-xs text-orange-700 font-medium mt-1.5">
+                      ⚠ {spreadPct}% price spread across platforms — agents listing the same property at different prices is a major red flag.
+                    </p>
+                  </div>
+                );
+              })()}
+              <div className="space-y-2">
+                {reportData.duplicateListings.map((dup, i) => (
+                  <DuplicateCard
+                    key={i}
+                    dup={dup}
+                    basePrice={reportData.duplicateListings![0]?.priceKsh ?? null}
+                  />
+                ))}
+              </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* What to do next */}
+        {reportData.fraudScore && (
+          <WhatToDoNext riskLevel={reportData.fraudScore.riskLevel} />
         )}
 
         {/* Complete with no fraud score */}
