@@ -289,7 +289,7 @@ paths:
           schema:
             type: string
             enum: [rent, sale]
-          default: rent
+            default: rent
         - name: days
           in: query
           schema:
@@ -320,7 +320,7 @@ paths:
           schema:
             type: string
             enum: [rent, sale]
-          default: rent
+            default: rent
         - name: days
           in: query
           schema:
