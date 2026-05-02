@@ -1,10 +1,15 @@
 import { useState } from "react";
 import { useListNeighbourhoods, useGetMarketStats, useGetMarketTrends } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Home, Clock, BarChart2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { TrendingUp, Home, Clock, BarChart2, Bell, BellRing, X, Loader2, BellOff } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -15,6 +20,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function formatKsh(val: number | null | undefined): string {
   if (val == null) return "—";
@@ -52,10 +59,198 @@ function StatCard({
   );
 }
 
+type PriceAlert = {
+  id: number;
+  neighbourhood: string;
+  listingType: string;
+  maxPriceKsh: number | null;
+  minBedrooms: number | null;
+  createdAt: string;
+};
+
+function PriceAlertSection({
+  neighbourhood,
+  listingType,
+  userId,
+  email,
+}: {
+  neighbourhood: string;
+  listingType: "rent" | "sale";
+  userId: string;
+  email: string;
+}) {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [maxPrice, setMaxPrice] = useState("");
+  const [bedrooms, setBedrooms] = useState("");
+
+  const { data, isLoading } = useQuery<{ alerts: PriceAlert[] }>({
+    queryKey: ["alerts", userId, neighbourhood, listingType],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/alerts?userId=${encodeURIComponent(userId)}`);
+      return r.json() as Promise<{ alerts: PriceAlert[] }>;
+    },
+    enabled: !!userId && !!neighbourhood,
+    staleTime: 30_000,
+  });
+
+  const existing = (data?.alerts ?? []).filter(
+    (a) => a.neighbourhood === neighbourhood && a.listingType === listingType
+  );
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${BASE}/api/alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          email,
+          neighbourhood,
+          listingType,
+          ...(maxPrice ? { maxPriceKsh: parseInt(maxPrice.replace(/,/g, ""), 10) } : {}),
+          ...(bedrooms ? { minBedrooms: parseInt(bedrooms, 10) } : {}),
+        }),
+      });
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+      setShowForm(false);
+      setMaxPrice("");
+      setBedrooms("");
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: number) => {
+      await fetch(`${BASE}/api/alerts/${id}?userId=${encodeURIComponent(userId)}`, { method: "DELETE" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts"] }),
+  });
+
+  if (!userId) {
+    return (
+      <div className="flex items-center gap-2 mt-4 text-sm text-slate-400">
+        <Bell className="h-4 w-4" />
+        <span>Sign in to set price alerts for this neighbourhood.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <BellRing className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium text-slate-700">Price Alerts</span>
+          {existing.length > 0 && (
+            <Badge className="bg-primary/10 text-primary border-primary/20 text-xs">{existing.length} active</Badge>
+          )}
+        </div>
+        {!showForm && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs h-8"
+            onClick={() => setShowForm(true)}
+          >
+            <Bell className="h-3.5 w-3.5" /> Set Alert
+          </Button>
+        )}
+      </div>
+
+      {/* Existing alerts */}
+      {isLoading && (
+        <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading alerts…
+        </div>
+      )}
+      {existing.map((a) => (
+        <div key={a.id} className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/15 rounded-lg mb-2 text-sm">
+          <BellRing className="h-4 w-4 text-primary flex-shrink-0" />
+          <div className="flex-1 text-slate-700">
+            <span className="font-medium capitalize">{a.neighbourhood}</span>
+            {" · "}
+            <span className="capitalize">{a.listingType}</span>
+            {a.maxPriceKsh && <span> · Max {formatKsh(a.maxPriceKsh)}</span>}
+            {a.minBedrooms != null && <span> · {a.minBedrooms}+ BR</span>}
+          </div>
+          <button
+            onClick={() => remove.mutate(a.id)}
+            disabled={remove.isPending}
+            className="text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+
+      {existing.length === 0 && !isLoading && !showForm && (
+        <p className="text-xs text-slate-400 mb-2">No alerts for this neighbourhood. Set one to get notified when prices drop.</p>
+      )}
+
+      {/* Create form */}
+      {showForm && (
+        <div className="p-4 border border-primary/20 rounded-xl bg-primary/5 space-y-3">
+          <p className="text-sm font-medium text-slate-700">
+            Alert for <span className="capitalize text-primary">{neighbourhood}</span> · {listingType === "rent" ? "rental" : "sale"} market
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Max price (KSh)</label>
+              <Input
+                placeholder="e.g. 80000"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">Min bedrooms</label>
+              <Input
+                placeholder="e.g. 2"
+                value={bedrooms}
+                onChange={(e) => setBedrooms(e.target.value)}
+                className="h-9 text-sm"
+                type="number"
+                min={0}
+                max={10}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 gap-1.5"
+              disabled={create.isPending}
+              onClick={() => create.mutate()}
+            >
+              {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+              Create Alert
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+          </div>
+          <p className="text-xs text-slate-400">
+            You'll be notified at <strong>{email}</strong> when new listings match these criteria.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MarketPage() {
   const [neighbourhood, setNeighbourhood] = useState<string>("");
   const [listingType, setListingType] = useState<"rent" | "sale">("rent");
   const [days, setDays] = useState<number>(30);
+
+  const { user } = useUser();
+  const userId = user?.id ?? "";
+  const email = user?.primaryEmailAddress?.emailAddress ?? "";
 
   const { data: nbhds, isLoading: nbhdsLoading } = useListNeighbourhoods();
 
@@ -178,7 +373,7 @@ export default function MarketPage() {
               )}
             </div>
 
-            <Card>
+            <Card className="mb-6">
               <CardHeader>
                 <CardTitle>
                   Price Trend — {listingType === "rent" ? "Rental" : "Sale"} Market (90 days)
@@ -251,6 +446,24 @@ export default function MarketPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Price alert section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BellRing className="h-4 w-4 text-primary" />
+                  Price Alerts for {neighbourhood.charAt(0).toUpperCase() + neighbourhood.slice(1)}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PriceAlertSection
+                  neighbourhood={neighbourhood}
+                  listingType={listingType}
+                  userId={userId}
+                  email={email}
+                />
               </CardContent>
             </Card>
           </>

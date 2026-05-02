@@ -39,6 +39,7 @@ export default function CheckPage() {
     const payload = {
       email,
       ...(mode === "url" ? { inputUrl: url } : { inputAddress: address }),
+      ...(user?.id ? { userId: user.id } : {}),
     };
 
     submitReport.mutate(

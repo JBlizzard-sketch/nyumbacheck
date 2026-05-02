@@ -13,6 +13,7 @@ const SubmitReportSchema = z.object({
   inputUrl: z.string().url().optional(),
   inputAddress: z.string().min(5).optional(),
   email: z.string().email(),
+  userId: z.string().optional(),
 }).refine(
   (d) => d.inputUrl || d.inputAddress,
   { message: "Either inputUrl or inputAddress must be provided" }
@@ -31,7 +32,7 @@ router.post("/reports", async (req: Request, res: Response) => {
     return;
   }
 
-  const { inputUrl, inputAddress, email } = parsed.data;
+  const { inputUrl, inputAddress, email, userId } = parsed.data;
 
   try {
     // Try to create a Stripe checkout session. If Stripe is unavailable (dev/no keys),
@@ -51,6 +52,7 @@ router.post("/reports", async (req: Request, res: Response) => {
           inputAddress: inputAddress ?? null,
           inputType: inputUrl ? "url" : "address",
           email,
+          userId: userId ?? null,
           status: "awaiting_payment",
         })
         .returning();
@@ -113,6 +115,7 @@ router.post("/reports", async (req: Request, res: Response) => {
         inputAddress: inputAddress ?? null,
         inputType: inputUrl ? "url" : "address",
         email,
+        userId: userId ?? null,
         status: initialStatus,
       })
       .returning();
@@ -188,6 +191,43 @@ router.get("/reports/:id", async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err, id }, "report.get_error");
     res.status(500).json({ error: "internal_error", message: "Failed to fetch report" });
+  }
+});
+
+// ── GET /reports/mine ─────────────────────────────────────────────────────────
+
+router.get("/reports/mine", async (req: Request, res: Response) => {
+  const userId = z.string().min(1).safeParse(req.query.userId);
+  if (!userId.success) {
+    res.status(400).json({ error: "bad_request", message: "userId query parameter required" });
+    return;
+  }
+
+  try {
+    const { fraudScoresTable } = await import("@workspace/db/schema");
+    const { eq: eqOp, desc } = await import("drizzle-orm");
+
+    const reports = await db
+      .select({
+        id: reportRequestsTable.id,
+        inputUrl: reportRequestsTable.inputUrl,
+        inputAddress: reportRequestsTable.inputAddress,
+        email: reportRequestsTable.email,
+        status: reportRequestsTable.status,
+        createdAt: reportRequestsTable.createdAt,
+        score: fraudScoresTable.score,
+        riskLevel: fraudScoresTable.riskLevel,
+      })
+      .from(reportRequestsTable)
+      .leftJoin(fraudScoresTable, eqOp(reportRequestsTable.fraudScoreId, fraudScoresTable.id))
+      .where(eqOp(reportRequestsTable.userId, userId.data))
+      .orderBy(desc(reportRequestsTable.createdAt))
+      .limit(50);
+
+    res.json({ reports });
+  } catch (err) {
+    logger.error({ err }, "report.mine_error");
+    res.status(500).json({ error: "internal_error" });
   }
 });
 

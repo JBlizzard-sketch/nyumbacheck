@@ -83,25 +83,31 @@ awaiting_payment  →  pending  →  processing  →  complete
 
 | Route | Page | Auth |
 |---|---|---|
-| `/` | Landing (redirects signed-in users to /my-reports) | Public |
-| `/check` | Submit listing URL or address + Stripe payment redirect | Public |
+| `/` | Landing — hero, live stats bar (reports/scammers/listings counts), 6 fraud signals explainer, CTA | Public |
+| `/check` | Submit listing URL or address + Stripe payment redirect; passes `userId` if signed in | Public |
 | `/reports/:id` | Report results — fraud gauge, signals, duplicate table. Polls while pending/processing/awaiting_payment. | Public |
-| `/market` | Price trend line chart + stats cards by neighbourhood | Public |
-| `/scammer` | Phone number registry lookup | Public |
-| `/my-reports` | Past submitted reports (localStorage-backed) | Clerk-protected |
+| `/market` | Price trend line chart + stats cards + price alert creation/management | Public |
+| `/scammer` | Phone number registry lookup + "Report a number" submission form | Public |
+| `/my-reports` | Merges server-side reports (by Clerk userId) + localStorage fallback | Clerk-protected |
+| `/admin` | Operations dashboard — stats, reports table, scammer registry management | Clerk-protected + email allowlist |
 | `/sign-in`, `/sign-up` | Clerk auth pages | Public |
 
 ## API Routes (all under /api)
 
 - `GET /healthz` — health check
-- `POST /reports` — submit fraud report (creates Stripe checkout if connected, else free mode)
+- `POST /reports` — submit fraud report (`email`, `inputUrl|inputAddress`, optional `userId`)
 - `GET /reports/:id` — get report status + fraud score
+- `GET /reports/mine?userId=xxx` — list reports for a Clerk user (server-side My Reports)
 - `GET /market/neighbourhoods` — list all tracked neighbourhoods
 - `GET /market/stats?neighbourhood=&listingType=&days=` — market aggregates
 - `GET /market/trends?neighbourhood=&listingType=&days=` — daily price series
 - `GET /scammer-registry/lookup?phone=` — scammer phone lookup
+- `POST /scammer-registry/report` — submit a scammer report (upserts reportCount)
 - `GET /listings`, `GET /listings/:id` — raw listings
 - `GET /agents`, `GET /agents/:id` — agent data
+- `POST /alerts` — create price alert (`userId`, `email`, `neighbourhood`, `listingType`, optional `maxPriceKsh`, `minBedrooms`)
+- `GET /alerts?userId=xxx` — list user's active alerts
+- `DELETE /alerts/:id?userId=xxx` — deactivate an alert
 - `POST /payments/mpesa/initiate` — M-Pesa STK push
 - `POST /payments/mpesa/callback` — Safaricom webhook
 - `GET /payments/mpesa/status/:checkoutRequestId` — payment status
@@ -109,6 +115,10 @@ awaiting_payment  →  pending  →  processing  →  complete
 - `GET /payments/stripe/confirm/:sessionId` — verify payment + unlock report
 - `GET /payments/stripe/products` — list Stripe products
 - `POST /api/stripe/webhook` — Stripe webhook (registered BEFORE express.json())
+- `GET /admin/stats` — aggregate stats (reports, scores, scammers, listings)
+- `GET /admin/reports?limit=&offset=&status=` — paginated reports with fraud scores
+- `GET /admin/scammers` — full scammer registry
+- `POST /admin/scammers/:id/confirm` — toggle confirmed status
 
 ## Auth Configuration
 
@@ -223,6 +233,7 @@ Admin API routes (all public aggregations):
 - Phase 14: Bug fix — fetchFraudScoreData now uses `inArray` to fetch all cluster members
 - Phase 15: Stripe Checkout integration (stripe-replit-sync, webhook handler, checkout/confirm routes, payment gate on check.tsx, awaiting_payment status in report.tsx)
 - Phase 16: Email delivery (Resend, branded HTML, wired into simulator), Scammer submission form + API endpoint, Admin dashboard (stats, reports table, scammer registry management, confirm/unconfirm)
+- Phase 17: Enhanced home page (live stats bar, 6 fraud signals explainer, CTA section), server-side My Reports (userId saved on submit, GET /reports/mine, merged with localStorage), price alerts (POST/GET/DELETE /alerts, market page UI with inline form + alert management)
 
 ## Remaining Work
 
@@ -230,6 +241,6 @@ Admin API routes (all public aggregations):
 - Set `VITE_ADMIN_EMAILS` to restrict admin dashboard access
 - Connect Stripe integration in Replit Integrations tab to enable live payments
 - Run `scripts/src/seed-products.ts` once after Stripe is connected
+- Price alert email delivery (wire alert checker into background worker — sends Resend email when new listings match criteria)
 - Python Celery pipeline wired to production Redis (currently simulation engine)
-- Price alert notifications (email/SMS when listing price drops)
-- OpenAPI spec update for Stripe + admin + scammer submission endpoints + client regeneration
+- OpenAPI spec update for all new endpoints + client regeneration
