@@ -1,6 +1,6 @@
 import { pgTable, text, serial, timestamp, integer, real, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import { z } from "zod";
 import { rawListingsTable } from "./listings";
 
 export const priceAlertsTable = pgTable("price_alerts", {

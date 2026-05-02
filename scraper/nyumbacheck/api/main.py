@@ -52,3 +52,8 @@ async def trigger_market_snapshots() -> dict:
     from nyumbacheck.jobs.tasks.pipeline_tasks import refresh_market_snapshots
     task = refresh_market_snapshots.delay()
     return {"task_id": task.id}
+
+
+# Register report routes
+from nyumbacheck.api.report_routes import router as report_router  # noqa: E402
+app.include_router(report_router)

@@ -3,13 +3,26 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: NyumbaCheck — Nairobi real estate fraud detection API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: reports
+    description: Fraud detection report requests
+  - name: listings
+    description: Property listings
+  - name: agents
+    description: Agent profiles and reputation
+  - name: market
+    description: Market intelligence data
+  - name: alerts
+    description: Price and listing alerts
+  - name: scammer-registry
+    description: Scammer phone number registry
+
 paths:
   /healthz:
     get:
@@ -24,8 +37,369 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Reports ────────────────────────────────────────────────────────────────
+
+  /reports:
+    post:
+      operationId: submitReport
+      tags: [reports]
+      summary: Submit a fraud report request
+      description: |
+        Submit a listing URL or property address for fraud analysis.
+        An async job runs the full dedup + fraud scoring pipeline.
+        Results are emailed to the provided address and available at GET /reports/:id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitReportRequest"
+      responses:
+        "201":
+          description: Report request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportRequestSummary"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /reports/{id}:
+    get:
+      operationId: getReport
+      tags: [reports]
+      summary: Get fraud report status and results
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "404":
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  # ── Listings ───────────────────────────────────────────────────────────────
+
+  /listings:
+    get:
+      operationId: listListings
+      tags: [listings]
+      summary: Search property listings
+      parameters:
+        - name: neighbourhood
+          in: query
+          schema:
+            type: string
+          description: Filter by canonical neighbourhood name
+        - name: listingType
+          in: query
+          schema:
+            type: string
+            enum: [rent, sale]
+        - name: minBedrooms
+          in: query
+          schema:
+            type: integer
+        - name: maxBedrooms
+          in: query
+          schema:
+            type: integer
+        - name: minPriceKsh
+          in: query
+          schema:
+            type: number
+        - name: maxPriceKsh
+          in: query
+          schema:
+            type: number
+        - name: platform
+          in: query
+          schema:
+            type: string
+          description: Filter by platform slug
+        - name: minFraudScore
+          in: query
+          schema:
+            type: number
+          description: Only return listings with fraud score above this value
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Listings found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingsPage"
+
+  /listings/{id}:
+    get:
+      operationId: getListing
+      tags: [listings]
+      summary: Get listing details with fraud score
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Listing found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  # ── Agents ─────────────────────────────────────────────────────────────────
+
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      summary: List and search agents
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search by name or phone number
+        - name: minReputationScore
+          in: query
+          schema:
+            type: number
+        - name: isBlacklisted
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Agents list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentsPage"
+
+  /agents/{id}:
+    get:
+      operationId: getAgent
+      tags: [agents]
+      summary: Get agent profile and reputation score
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Agent found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  # ── Market ─────────────────────────────────────────────────────────────────
+
+  /market/neighbourhoods:
+    get:
+      operationId: listNeighbourhoods
+      tags: [market]
+      summary: List all tracked Nairobi neighbourhoods
+      responses:
+        "200":
+          description: Neighbourhoods list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  neighbourhoods:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Neighbourhood"
+                required: [neighbourhoods]
+
+  /market/stats:
+    get:
+      operationId: getMarketStats
+      tags: [market]
+      summary: Get market statistics for a neighbourhood
+      parameters:
+        - name: neighbourhood
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: listingType
+          in: query
+          schema:
+            type: string
+            enum: [rent, sale]
+          default: rent
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+          description: Look-back period in days
+      responses:
+        "200":
+          description: Market stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketStats"
+
+  /market/trends:
+    get:
+      operationId: getMarketTrends
+      tags: [market]
+      summary: Get price trend time series for a neighbourhood
+      parameters:
+        - name: neighbourhood
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: listingType
+          in: query
+          schema:
+            type: string
+            enum: [rent, sale]
+          default: rent
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 90
+      responses:
+        "200":
+          description: Price trends
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketTrends"
+
+  # ── Alerts ─────────────────────────────────────────────────────────────────
+
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: List user price and listing alerts
+      responses:
+        "200":
+          description: Alerts list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PriceAlert"
+                required: [alerts]
+
+    post:
+      operationId: createAlert
+      tags: [alerts]
+      summary: Create a price or listing alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlertRequest"
+      responses:
+        "201":
+          description: Alert created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceAlert"
+
+  # ── Scammer Registry ────────────────────────────────────────────────────────
+
+  /scammer-registry/lookup:
+    get:
+      operationId: lookupScammer
+      tags: [scammer-registry]
+      summary: Check if a phone number is in the scammer registry
+      parameters:
+        - name: phone
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Phone number to look up (any format — will be normalised)
+      responses:
+        "200":
+          description: Lookup result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScammerLookupResult"
+
 components:
   schemas:
+
+    # ── Shared ──────────────────────────────────────────────────────────────
+
     HealthStatus:
       type: object
       properties:
@@ -34,3 +408,605 @@ components:
       required:
         - status
 
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+      required:
+        - error
+        - message
+
+    # ── Reports ─────────────────────────────────────────────────────────────
+
+    SubmitReportRequest:
+      type: object
+      properties:
+        inputUrl:
+          type: string
+          description: URL of the listing to check (e.g. BuyRentKenya listing URL)
+        inputAddress:
+          type: string
+          description: Property address or description to check
+        email:
+          type: string
+          format: email
+          description: Email address to receive the report
+      required:
+        - email
+      description: Either inputUrl or inputAddress must be provided
+
+    ReportRequestSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, processing, complete, failed]
+        email:
+          type: string
+        inputUrl:
+          type: string
+          nullable: true
+        inputAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        estimatedCompletionMinutes:
+          type: integer
+          description: Rough ETA in minutes
+      required:
+        - id
+        - status
+        - email
+        - createdAt
+        - estimatedCompletionMinutes
+
+    FraudSignal:
+      type: object
+      properties:
+        type:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        weight:
+          type: number
+        score:
+          type: number
+        rawValue:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: number
+      required:
+        - type
+        - label
+        - description
+        - weight
+        - score
+
+    FraudScoreSummary:
+      type: object
+      properties:
+        score:
+          type: number
+          description: Composite fraud score 0–100
+        riskLevel:
+          type: string
+          enum: [low, medium, high, critical]
+        summary:
+          type: string
+          description: Human-readable explanation
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/FraudSignal"
+        platformCountScore:
+          type: number
+          nullable: true
+        priceSpreadScore:
+          type: number
+          nullable: true
+        agentPhoneOverlapScore:
+          type: number
+          nullable: true
+        daysOnMarketScore:
+          type: number
+          nullable: true
+        imageReuseScore:
+          type: number
+          nullable: true
+        priceAnomalyScore:
+          type: number
+          nullable: true
+      required:
+        - score
+        - riskLevel
+        - summary
+        - signals
+
+    DuplicateListing:
+      type: object
+      properties:
+        platform:
+          type: string
+        url:
+          type: string
+        priceKsh:
+          type: number
+          nullable: true
+        agentPhone:
+          type: string
+          nullable: true
+      required:
+        - platform
+        - url
+
+    ReportResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [pending, processing, complete, failed]
+        email:
+          type: string
+        inputUrl:
+          type: string
+          nullable: true
+        inputAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reportUrl:
+          type: string
+          nullable: true
+          description: URL to the full HTML/PDF report
+        fraudScore:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/FraudScoreSummary"
+        duplicateListings:
+          type: array
+          items:
+            $ref: "#/components/schemas/DuplicateListing"
+        platformCount:
+          type: integer
+          nullable: true
+        priceRangeKsh:
+          type: object
+          nullable: true
+          properties:
+            min:
+              type: number
+            max:
+              type: number
+          required: [min, max]
+        failureReason:
+          type: string
+          nullable: true
+      required:
+        - id
+        - status
+        - email
+        - createdAt
+        - duplicateListings
+
+    # ── Listings ────────────────────────────────────────────────────────────
+
+    ListingSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        platform:
+          type: string
+        url:
+          type: string
+        title:
+          type: string
+          nullable: true
+        listingType:
+          type: string
+          enum: [rent, sale]
+        priceKsh:
+          type: number
+          nullable: true
+        bedrooms:
+          type: integer
+          nullable: true
+        bathrooms:
+          type: integer
+          nullable: true
+        sqft:
+          type: number
+          nullable: true
+        neighbourhood:
+          type: string
+          nullable: true
+        fraudScore:
+          type: number
+          nullable: true
+        riskLevel:
+          type: string
+          nullable: true
+          enum: [low, medium, high, critical]
+        isActive:
+          type: boolean
+        firstSeenAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - platform
+        - url
+        - listingType
+        - isActive
+        - firstSeenAt
+
+    ListingDetail:
+      allOf:
+        - $ref: "#/components/schemas/ListingSummary"
+        - type: object
+          properties:
+            rawAddress:
+              type: string
+              nullable: true
+            imageUrls:
+              type: array
+              items:
+                type: string
+            agentName:
+              type: string
+              nullable: true
+            agentPhone:
+              type: string
+              nullable: true
+            daysOnMarket:
+              type: integer
+              nullable: true
+            fraudScoreDetail:
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/FraudScoreSummary"
+            duplicates:
+              type: array
+              items:
+                $ref: "#/components/schemas/DuplicateListing"
+
+    ListingsPage:
+      type: object
+      properties:
+        listings:
+          type: array
+          items:
+            $ref: "#/components/schemas/ListingSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - listings
+        - total
+        - page
+        - pageSize
+        - totalPages
+
+    # ── Agents ──────────────────────────────────────────────────────────────
+
+    AgentSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        company:
+          type: string
+          nullable: true
+        reputationScore:
+          type: number
+          nullable: true
+        totalListings:
+          type: integer
+        ghostListingRate:
+          type: number
+          nullable: true
+        isVerified:
+          type: boolean
+        isBlacklisted:
+          type: boolean
+      required:
+        - id
+        - totalListings
+        - isVerified
+        - isBlacklisted
+
+    AgentDetail:
+      allOf:
+        - $ref: "#/components/schemas/AgentSummary"
+        - type: object
+          properties:
+            phoneNumbers:
+              type: array
+              items:
+                type: string
+            priceConsistencyScore:
+              type: number
+              nullable: true
+            duplicateListingRate:
+              type: number
+              nullable: true
+            blacklistReason:
+              type: string
+              nullable: true
+            recentListings:
+              type: array
+              items:
+                $ref: "#/components/schemas/ListingSummary"
+
+    AgentsPage:
+      type: object
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSummary"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - agents
+        - total
+        - page
+        - pageSize
+        - totalPages
+
+    # ── Market ──────────────────────────────────────────────────────────────
+
+    Neighbourhood:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        city:
+          type: string
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+      required:
+        - slug
+        - name
+        - city
+
+    MarketStats:
+      type: object
+      properties:
+        neighbourhood:
+          type: string
+        listingType:
+          type: string
+          enum: [rent, sale]
+        period:
+          type: string
+          description: e.g. "Last 30 days"
+        activeListings:
+          type: integer
+        uniqueProperties:
+          type: integer
+        duplicateRate:
+          type: number
+          nullable: true
+          description: Proportion of listings that are duplicates (0–1)
+        medianPriceKsh:
+          type: number
+          nullable: true
+        medianPricePerSqftKsh:
+          type: number
+          nullable: true
+        p25PriceKsh:
+          type: number
+          nullable: true
+        p75PriceKsh:
+          type: number
+          nullable: true
+        medianDaysOnMarket:
+          type: number
+          nullable: true
+        listingVelocityIndex:
+          type: number
+          nullable: true
+          description: Normalised 0–100. Higher = faster-moving market
+        highFraudListings:
+          type: integer
+        avgFraudScore:
+          type: number
+          nullable: true
+      required:
+        - neighbourhood
+        - listingType
+        - period
+        - activeListings
+        - uniqueProperties
+        - highFraudListings
+
+    MarketTrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        medianPriceKsh:
+          type: number
+          nullable: true
+        activeListings:
+          type: integer
+        newListings:
+          type: integer
+        medianDaysOnMarket:
+          type: number
+          nullable: true
+      required:
+        - date
+        - activeListings
+        - newListings
+
+    MarketTrends:
+      type: object
+      properties:
+        neighbourhood:
+          type: string
+        listingType:
+          type: string
+          enum: [rent, sale]
+        dataPoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketTrendPoint"
+      required:
+        - neighbourhood
+        - listingType
+        - dataPoints
+
+    # ── Alerts ──────────────────────────────────────────────────────────────
+
+    PriceAlert:
+      type: object
+      properties:
+        id:
+          type: integer
+        alertType:
+          type: string
+          enum: [listing_watch, search_alert]
+        neighbourhood:
+          type: string
+          nullable: true
+        listingType:
+          type: string
+          nullable: true
+          enum: [rent, sale]
+        minBedrooms:
+          type: integer
+          nullable: true
+        maxBedrooms:
+          type: integer
+          nullable: true
+        minPriceKsh:
+          type: number
+          nullable: true
+        maxPriceKsh:
+          type: number
+          nullable: true
+        isActive:
+          type: boolean
+        lastTriggeredAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - alertType
+        - isActive
+        - createdAt
+
+    CreateAlertRequest:
+      type: object
+      properties:
+        alertType:
+          type: string
+          enum: [listing_watch, search_alert]
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+          nullable: true
+        listingId:
+          type: integer
+          nullable: true
+          description: Required for listing_watch alerts
+        neighbourhood:
+          type: string
+          nullable: true
+        listingType:
+          type: string
+          enum: [rent, sale]
+          nullable: true
+        minBedrooms:
+          type: integer
+          nullable: true
+        maxBedrooms:
+          type: integer
+          nullable: true
+        minPriceKsh:
+          type: number
+          nullable: true
+        maxPriceKsh:
+          type: number
+          nullable: true
+      required:
+        - alertType
+        - email
+
+    # ── Scammer Registry ────────────────────────────────────────────────────
+
+    ScammerLookupResult:
+      type: object
+      properties:
+        phone:
+          type: string
+        normalisedPhone:
+          type: string
+        isRegistered:
+          type: boolean
+        reportCount:
+          type: integer
+          nullable: true
+        linkedListingCount:
+          type: integer
+          nullable: true
+        isConfirmed:
+          type: boolean
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required:
+        - phone
+        - normalisedPhone
+        - isRegistered
