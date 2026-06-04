@@ -4,6 +4,8 @@
 
 NyumbaCheck audits the Nairobi property market — detecting ghost listings, duplicate entries, price manipulation, and fraudulent agents — and turns that raw data into clean market intelligence for buyers, investors, and proptech developers.
 
+**GitHub:** https://github.com/JBlizzard-sketch/nyumbacheck &nbsp;|&nbsp; **Deployment guide:** [Deployment](#deployment)
+
 ---
 
 ## Table of Contents
